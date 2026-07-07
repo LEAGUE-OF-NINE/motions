@@ -15,7 +15,7 @@
         <NoWarn>1701;1702;2211;CA2211;IDE1006;IDE0060</NoWarn>
         <DebugType>none</DebugType>
         <RootNamespace>Motions</RootNamespace>
-        <AssemblyName>Motions</AssemblyName>
+        <AssemblyName>motions</AssemblyName>
         <Product>Motions</Product>
         <Version>1.0.0</Version>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
