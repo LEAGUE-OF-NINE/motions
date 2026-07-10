@@ -228,13 +228,20 @@ public static class TimelineBuilder
                 }
                 else if (phase.type == "GiveDamage")
                 {
-                    var damage = marker.Cast<SkillGiveTiming_GiveDamage>();
+                    var damage = marker.Cast<SkillGiveTiming_GiveDamage>(); // damage = damage to be applied visually
+                    damage.ratios = 1f;
                     damage.info = new OnGiveDamageInfo
                     {
                         multiHit = phase.damage != null ? phase.damage.multiHit : 1,
                         isUpAttack = phase.damage != null ? phase.damage.isUpAttack : false,
                         multiHitDuration = phase.damage != null ? phase.damage.multiHitDuration : 0f
                     };
+
+                    if (phase.damageRatio > 0)
+                    {
+                        damage.ratios = phase.damageRatio;
+                        Logger.LogInfo($"[DamageRatioTest] Damage Ratio has been edited to be {damage.ratios}, with the alteration being {phase.damageRatio}");
+                    }
 
                     if (phase.sturn != null)
                     {
