@@ -65,6 +65,7 @@ public class SkillPhase
     public Vec3Data move;
     public bool isRefreshDir;
     public DamageData damage;
+    public float damageRatio;
     public SturnData sturn;
 }
 
