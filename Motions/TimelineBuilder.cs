@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEngine.Timeline;
 using Il2CppInterop.Runtime;
 using System.IO;
-using Newtonsoft.Json;
+using System.Text.Json;
 using System;
 using DG.Tweening;
 
@@ -10,6 +10,16 @@ namespace Motions;
 
 public static class TimelineBuilder
 {
+    // The interop Newtonsoft.Json is an Il2Cpp proxy and can't deserialize into
+    // managed plugin types, so we use the runtime's System.Text.Json instead.
+    // Lenient options match Newtonsoft's tolerance of comments/trailing commas.
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        IncludeFields = true,
+        AllowTrailingCommas = true,
+        ReadCommentHandling = JsonCommentHandling.Skip
+    };
+
     public static void AddHitChecker(TrackAsset track, double time, bool isCanNextMotion, float isNextMotionCoinDelay)
     {
         var marker = track.CreateMarker(Il2CppType.Of<CharacterAppearanceMarker_HitCheaker>(), time);
@@ -288,7 +298,7 @@ public static class TimelineBuilder
             try
             {
                 string json = File.ReadAllText(jsonPath);
-                data = JsonConvert.DeserializeObject<SkillData>(json);
+                data = JsonSerializer.Deserialize<SkillData>(json, JsonOptions);
             }
             catch (System.Exception ex)
             {
