@@ -43,6 +43,10 @@
             <HintPath>%(Identity)</HintPath>
             <Private>false</Private>
         </Reference>
+        <Reference Include="$(LimbusCompanyFolder)\BepInEx\plugins\Lethe.dll">
+            <HintPath>%(Identity)</HintPath>
+            <Private>false</Private>
+        </Reference>
     </ItemGroup>
 
     <Target Name="CopyFile" AfterTargets="Build">
