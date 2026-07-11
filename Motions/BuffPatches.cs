@@ -73,18 +73,14 @@ namespace Motions
                 IsSetOverrideDie = cachedAbility.IsSetOverrideDie
             };
 
-            instance.transform.SetParent(__instance.viewEffectRootDirection);
+            instance.transform.SetParent(cachedAbility.effectObj.name.EndsWith("_Front")
+                ? __instance.viewEffectRootDirection
+                : __instance.viewEffectRootBack);
             instance.transform.localPosition = Vector3.zero;
             instance.transform.localRotation = Quaternion.identity;
             instance.transform.localScale =
                 Vector3.one * __instance.Appearance.charInfo.transform_Height.localPosition.y * 0.25f;
 
-            var sortingGroup = instance.GetComponent<UnityEngine.Rendering.SortingGroup>();
-            if (sortingGroup == null)
-                sortingGroup = instance.AddComponent<UnityEngine.Rendering.SortingGroup>();
-
-            sortingGroup.sortingLayerName = "BattleUnit";
-            sortingGroup.sortingOrder = 2;
             __instance._effects_ability.Add(ability);
             instance.SetActive(false);
             instance.SetActive(true);
