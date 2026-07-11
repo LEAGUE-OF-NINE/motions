@@ -18,8 +18,8 @@ the runtime keyword the framework assigned it, so the two have to match exactly.
 
 ## The prefab
 
-Motions loads the prefab whose name **matches the bundle's name**. A bundle named
-`myeffect.bundle` needs a prefab called `myeffect`.
+Motions loads the **first prefab** that it finds from the bundle. Therefore,
+only use 1 prefab in the bundle that will store your VFX.
 
 The effect spawns behind the character by default. Ending the prefab's name with
 `_Front` puts it in front instead:
