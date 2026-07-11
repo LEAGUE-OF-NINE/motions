@@ -1,0 +1,11 @@
+[book]
+title = "Motions"
+description = "Custom motion timelines for Limbus Company"
+authors = ["Limi"]
+language = "en"
+src = "src"
+
+[preprocessor.template]
+
+[output.html]
+git-repository-url = "https://github.com/LEAGUE-OF-NINE/motions"

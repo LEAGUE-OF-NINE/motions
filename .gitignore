@@ -365,3 +365,6 @@ FodyWeavers.xsd
 # Ignore Directiory.build.props
 Directory.Build.props
 /.idea/
+
+# mdbook output
+docs/book/
