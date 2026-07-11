@@ -53,7 +53,6 @@ public class Motions
                                 string buffId = Path.GetFileName(charDir).Remove(0, 11);
                                 Logger.LogWarning($"Discovered directory for Buff: [{buffId}] at path: {charDir}");
 
-                                // Get the runtime keyword assigned by the framework.
                                 BUFF_UNIQUE_KEYWORD keyword = CustomBuffs.ParseBuffUniqueKeyword(buffId);
 
                                 Logger.LogInfo($"Resolved '{buffId}' -> {(int)keyword}");

@@ -139,22 +139,14 @@ public static class MotionData
         {
             foreach (var assetName in bundle.AllAssetNames())
             {
-                string lower = assetName.ToLower();
-                string bundleName = bundle.GetName().ToLower();
+                if (!assetName.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
+                    continue;
 
-                bool isExact = lower == bundleName + ".prefab"
-                    || lower.EndsWith("/" + bundleName + ".prefab");
+                Logger.LogWarning($"Loading prefab {assetName}");
 
-                bool isFuzzy = (lower.Contains("/" + bundleName + ".")
-                    || lower.StartsWith(bundleName + "."))
-                    && lower.EndsWith(".prefab");
-
-                if (isExact || isFuzzy)
-                {
-                    var asset = bundle.LoadAsset(assetName, Il2CppType.Of<GameObject>());
-                    if (asset != null)
-                        return asset.Cast<GameObject>();
-                }
+                var asset = bundle.LoadAsset(assetName, Il2CppType.Of<GameObject>());
+                if (asset != null)
+                    return asset.Cast<GameObject>();
             }
         }
 
