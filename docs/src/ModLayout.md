@@ -27,3 +27,5 @@ BepInEx/plugins/Lethe/mods/
 Bundles are loaded when the battle scene loads, and unloaded when the stage
 ends or the scene changes. You don't need to restart the game to test a change —
 leaving the battle and re-entering it is enough to pick up a rebuilt bundle.
+When adding new BuffVFX however, the game must be fully reloaded for caching
+to work.
