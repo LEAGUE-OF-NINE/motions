@@ -1,7 +1,10 @@
-using System;
 using HarmonyLib;
 using Il2CppInterop.Runtime.Injection;
 using Il2CppSystem.IO;
+using Lethe.Patches;
+using System;
+using System.Collections.Generic;
+using UnityEngine;
 using UnityEngine.Playables;
 using UnityEngine.Timeline;
 
@@ -42,9 +45,37 @@ public class Motions
 
                     var motionsRoot = Path.Combine(modPath, "custom_motions");
                     if (!Directory.Exists(motionsRoot)) continue;
-
+                    // directory custom_motions:
                     foreach (var charDir in Directory.GetDirectories(motionsRoot))
                     {
+                        if (charDir.Contains("MOTIONBUFF_"))
+                        {
+                                string buffId = Path.GetFileName(charDir).Remove(0, 11);
+                                Logger.LogWarning($"Discovered directory for Buff: [{buffId}] at path: {charDir}");
+
+                                // Get the runtime keyword assigned by the framework.
+                                BUFF_UNIQUE_KEYWORD keyword = CustomBuffs.ParseBuffUniqueKeyword(buffId);
+
+                                Logger.LogInfo($"Resolved '{buffId}' -> {(int)keyword}");
+
+                                foreach (var bundlePath in Directory.GetFiles(charDir, "*.bundle", SearchOption.AllDirectories))
+                                {
+                                    Logger.LogInfo($"Loading bundle for {buffId}: {bundlePath}");
+
+                                    var bundle = AssetBundle.LoadFromFile(bundlePath, 0);
+                                    if (bundle == null)
+                                        continue;
+
+                                    if (!MotionData.LoadedBuffAssets.ContainsKey(keyword))
+                                        MotionData.LoadedBuffAssets.Add(keyword, new System.Collections.Generic.List<AssetBundle>());
+
+                                    MotionData.LoadedBuffAssets[keyword].Add(bundle);
+
+                                    Logger.LogWarning($"Loaded motion bundle {bundle.name} for keyword {(int)keyword} ({buffId})");
+                                }
+                                continue;
+                        }
+
                         string appearanceID = Path.GetFileName(charDir);
                         Logger.LogWarning($"Discovered directory for ID: [{appearanceID}] at path: {charDir}");
 
@@ -138,7 +169,7 @@ public class Motions
     {
         string appearanceID = unitView?._unitModel?.GetAppearanceID() ?? __instance.charInfo.appearanceID;
         Logger.LogInfo($"CharacterAppearance.Initialize called for: {appearanceID} (Source: {(unitView != null ? "Model" : "CharInfo")})");
-
+        CueExtractor.EagerCacheBuffEffects();
         bool hasCustomJSON = MotionData.HasDefinition(appearanceID);
         bool hasCustomBundle = MotionData.HasBundle(appearanceID);
 

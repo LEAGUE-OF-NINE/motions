@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using FX;
 using Il2CppInterop.Runtime;
 using UnityEngine;
 using UnityEngine.Timeline;
@@ -12,6 +13,12 @@ namespace Motions;
 /// </summary>
 public static class MotionData
 {
+    // --- Bundles from BuffEffect -------------------------------------------
+
+    public static readonly Dictionary<BUFF_UNIQUE_KEYWORD, List<AssetBundle>> LoadedBuffAssets = new();
+
+    public static readonly Dictionary<BUFF_UNIQUE_KEYWORD, Effect_Ability> CreatedAbilityEffects = new();
+
     // ---- Bundle loading ---------------------------------------------------
 
     public static readonly Dictionary<string, List<AssetBundle>> LoadedAssets = new();
@@ -45,6 +52,8 @@ public static class MotionData
 
     public static bool HasBundle(string appearanceID)
         => LoadedAssets.ContainsKey(appearanceID);
+
+    public static bool HasBundleBuff(string buffID) => LoadedAssets.ContainsKey(buffID);
 
     public static string GetDefinitionPath(string appearanceID, MOTION_DETAIL detail)
     {
@@ -121,6 +130,37 @@ public static class MotionData
         return null;
     }
 
+    public static GameObject FindPrefabAssetBuff(BUFF_UNIQUE_KEYWORD keyword)
+    {
+        if (!LoadedBuffAssets.TryGetValue(keyword, out var bundles))
+            return null;
+
+        foreach (var bundle in bundles)
+        {
+            foreach (var assetName in bundle.AllAssetNames())
+            {
+                string lower = assetName.ToLower();
+                string bundleName = bundle.GetName().ToLower();
+
+                bool isExact = lower == bundleName + ".prefab"
+                    || lower.EndsWith("/" + bundleName + ".prefab");
+
+                bool isFuzzy = (lower.Contains("/" + bundleName + ".")
+                    || lower.StartsWith(bundleName + "."))
+                    && lower.EndsWith(".prefab");
+
+                if (isExact || isFuzzy)
+                {
+                    var asset = bundle.LoadAsset(assetName, Il2CppType.Of<GameObject>());
+                    if (asset != null)
+                        return asset.Cast<GameObject>();
+                }
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>Finds any TimelineAsset in the bundles for this appearance.</summary>
     public static TimelineAsset FindTimelineForAppearance(string appearanceID)
     {
@@ -185,6 +225,7 @@ public static class MotionData
         }
         Logger.LogWarning("Unloading and clearing all custom motions and bundles.");
         LoadedAssets.Clear();
+        LoadedBuffAssets.Clear();
         CustomMotionDefinitions.Clear();
         PatchedCharacters.Clear();
         SoundCueCache.Clear();

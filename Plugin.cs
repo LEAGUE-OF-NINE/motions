@@ -30,5 +30,6 @@ public class Plugin : BasePlugin
 
         var harmony = new Harmony(GUID);
         Motions.Setup(harmony);
+        harmony.PatchAll(typeof(BuffPatches));
     }
 }

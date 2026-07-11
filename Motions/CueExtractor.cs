@@ -1,3 +1,4 @@
+using Il2CppSystem;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Timeline;
@@ -38,6 +39,41 @@ public static class CueExtractor
 
         MotionData.TimelineCache[key] = instance;
         return instance;
+    }
+
+    public static void EagerCacheBuffEffects()
+    {
+        foreach (var pair in MotionData.LoadedBuffAssets)
+        {
+            BUFF_UNIQUE_KEYWORD keyword = pair.Key;
+
+            if (MotionData.CreatedAbilityEffects.ContainsKey(keyword))
+                continue;
+
+            Logger.LogInfo($"Caching {keyword} ({(int)keyword})");
+
+            var obj = MotionData.FindPrefabAssetBuff(keyword);
+            if (obj == null)
+            {
+                Logger.LogError($"Couldn't find prefab for {keyword}");
+                continue;
+            }
+
+            var persistentPrefab = UnityEngine.Object.Instantiate(obj);
+            persistentPrefab.name = obj.name;
+            persistentPrefab.SetActive(false);
+
+            UnityEngine.Object.DontDestroyOnLoad(persistentPrefab);
+
+            var ability = new Effect_Ability
+            {
+                keyword = keyword,
+                effectObj = persistentPrefab,
+                IsSetOverrideDie = false
+            };
+
+            MotionData.CreatedAbilityEffects.Add(keyword, ability);
+        }
     }
 
     /// <summary>
