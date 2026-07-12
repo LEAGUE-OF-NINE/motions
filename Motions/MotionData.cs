@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using FX;
 using Il2CppInterop.Runtime;
 using UnityEngine;
 using UnityEngine.Timeline;
@@ -17,7 +16,16 @@ public static class MotionData
 
     public static readonly Dictionary<BUFF_UNIQUE_KEYWORD, List<AssetBundle>> LoadedBuffAssets = new();
 
-    public static readonly Dictionary<BUFF_UNIQUE_KEYWORD, Effect_Ability> CreatedAbilityEffects = new();
+    /// <summary>
+    /// Cached prefab GameObjects for buff aura VFX, keyed by buff keyword.
+    /// These are the raw prefabs — instantiation happens per-unit at runtime.
+    /// </summary>
+    public static readonly Dictionary<BUFF_UNIQUE_KEYWORD, GameObject> BuffAuraPrefabs = new();
+
+    /// <summary>
+    /// Whether the prefab should render in front of the character (name ends with "_Front").
+    /// </summary>
+    public static readonly Dictionary<BUFF_UNIQUE_KEYWORD, bool> BuffAuraIsFront = new();
 
     // ---- Bundle loading ---------------------------------------------------
 
@@ -130,8 +138,14 @@ public static class MotionData
         return null;
     }
 
-    public static GameObject FindPrefabAssetBuff(BUFF_UNIQUE_KEYWORD keyword)
+    /// <summary>
+    /// Loads the first prefab found in bundles for a given buff keyword.
+    /// Also records whether the prefab name ends with "_Front" for front/back placement.
+    /// </summary>
+    public static GameObject FindBuffAuraPrefab(BUFF_UNIQUE_KEYWORD keyword, out bool isFront)
     {
+        isFront = false;
+
         if (!LoadedBuffAssets.TryGetValue(keyword, out var bundles))
             return null;
 
@@ -142,7 +156,11 @@ public static class MotionData
                 if (!assetName.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
                     continue;
 
-                Logger.LogWarning($"Loading prefab {assetName}");
+                // Extract just the asset name (no path/extension) for the _Front check
+                string assetNameOnly = System.IO.Path.GetFileNameWithoutExtension(assetName);
+                isFront = assetNameOnly.EndsWith("_Front", StringComparison.OrdinalIgnoreCase);
+
+                Logger.LogWarning($"Loading buff aura prefab {assetName} (isFront={isFront})");
 
                 var asset = bundle.LoadAsset(assetName, Il2CppType.Of<GameObject>());
                 if (asset != null)
@@ -218,6 +236,8 @@ public static class MotionData
         Logger.LogWarning("Unloading and clearing all custom motions and bundles.");
         LoadedAssets.Clear();
         LoadedBuffAssets.Clear();
+        BuffAuraPrefabs.Clear();
+        BuffAuraIsFront.Clear();
         CustomMotionDefinitions.Clear();
         PatchedCharacters.Clear();
         SoundCueCache.Clear();

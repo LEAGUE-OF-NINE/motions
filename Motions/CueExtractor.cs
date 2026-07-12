@@ -41,38 +41,30 @@ public static class CueExtractor
         return instance;
     }
 
+    /// <summary>
+    /// Pre-loads buff aura prefabs from bundles into MotionData.BuffAuraPrefabs.
+    /// Called once at battle init. No instantiation — that happens per-unit when the buff is applied.
+    /// </summary>
     public static void EagerCacheBuffEffects()
     {
         foreach (var pair in MotionData.LoadedBuffAssets)
         {
             BUFF_UNIQUE_KEYWORD keyword = pair.Key;
 
-            if (MotionData.CreatedAbilityEffects.ContainsKey(keyword))
+            if (MotionData.BuffAuraPrefabs.ContainsKey(keyword))
                 continue;
 
-            Logger.LogInfo($"Caching {keyword} ({(int)keyword})");
+            Logger.LogInfo($"Caching buff aura prefab for {keyword} ({(int)keyword})");
 
-            var obj = MotionData.FindPrefabAssetBuff(keyword);
-            if (obj == null)
+            var prefab = MotionData.FindBuffAuraPrefab(keyword, out bool isFront);
+            if (prefab == null)
             {
-                Logger.LogError($"Couldn't find prefab for {keyword}");
+                Logger.LogError($"Couldn't find buff aura prefab for {keyword}");
                 continue;
             }
 
-            var persistentPrefab = UnityEngine.Object.Instantiate(obj);
-            persistentPrefab.name = obj.name;
-            persistentPrefab.SetActive(false);
-
-            UnityEngine.Object.DontDestroyOnLoad(persistentPrefab);
-
-            var ability = new Effect_Ability
-            {
-                keyword = keyword,
-                effectObj = persistentPrefab,
-                IsSetOverrideDie = false
-            };
-
-            MotionData.CreatedAbilityEffects.Add(keyword, ability);
+            MotionData.BuffAuraPrefabs.Add(keyword, prefab);
+            MotionData.BuffAuraIsFront.Add(keyword, isFront);
         }
     }
 
