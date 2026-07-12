@@ -45,6 +45,15 @@ public class Motions
 
                     var motionsRoot = Path.Combine(modPath, "custom_motions");
                     if (!Directory.Exists(motionsRoot)) continue;
+
+                    // ---- Parse per-character CharacterVFX.json ----
+                    foreach (var charDir in Directory.GetDirectories(motionsRoot))
+                    {
+                        if (charDir.Contains("MOTIONBUFF_")) continue;
+                        string appearanceID = Path.GetFileName(charDir);
+                        ParseCharacterVFXJson(charDir, appearanceID);
+                    }
+
                     // directory custom_motions:
                     foreach (var charDir in Directory.GetDirectories(motionsRoot))
                     {
@@ -72,6 +81,7 @@ public class Motions
 
                                     Logger.LogWarning($"Loaded motion bundle {bundle.name} for keyword {(int)keyword} ({buffId})");
                                 }
+
                                 continue;
                         }
 
@@ -160,6 +170,56 @@ public class Motions
         }
     }
 
+    // ---- CharacterVFX.json / buff_vfx.json parser -------------------------
+
+    /// <summary>
+    /// Parses a CharacterVFX.json inside a character's custom_motions appearance folder
+    /// and stores entries under the given appearanceID in MotionData.BuffVfxEntries.
+    /// </summary>
+    private static void ParseCharacterVFXJson(string directory, string appearanceID)
+    {
+        string configPath = Path.Combine(directory, "CharacterVFX.json");
+        if (!File.Exists(configPath)) return;
+
+        try
+        {
+            string json = File.ReadAllText(configPath);
+            var root = SimpleJSON.JSONNode.Parse(json);
+            var vfxArray = root["VFX"]?.AsArray;
+            if (vfxArray == null || vfxArray.Count == 0) return;
+
+            if (!MotionData.BuffVfxEntries.ContainsKey(appearanceID))
+                MotionData.BuffVfxEntries[appearanceID] = new List<BuffVfxEntry>();
+
+            for (int i = 0; i < vfxArray.Count; i++)
+            {
+                var entryNode = vfxArray[i];
+                var buffVfx = new BuffVfxEntry
+                {
+                    Keyword = entryNode["Keyword"]?.Value ?? "",
+                    StackThreshold = entryNode["StackThreshold"]?.AsInt ?? 0,
+                    TurnThreshold = entryNode["TurnThreshold"]?.AsInt ?? 0,
+                    ActiveOrNot = entryNode["ActiveOrNot"]?.AsBool ?? true,
+                    VFXName = entryNode["VFXName"]?.Value ?? ""
+                };
+
+                if (string.IsNullOrEmpty(buffVfx.Keyword) || string.IsNullOrEmpty(buffVfx.VFXName))
+                {
+                    Logger.LogWarning($"[BuffVfx] {appearanceID}: Skipping entry with missing Keyword or VFXName");
+                    continue;
+                }
+
+                buffVfx.ParsedKeyword = CustomBuffs.ParseBuffUniqueKeyword(buffVfx.Keyword);
+                MotionData.BuffVfxEntries[appearanceID].Add(buffVfx);
+                Logger.LogInfo($"[BuffVfx] {appearanceID}: Registered Keyword={buffVfx.Keyword}, VFXName={buffVfx.VFXName}, StackThreshold={buffVfx.StackThreshold}, TurnThreshold={buffVfx.TurnThreshold}, ActiveOrNot={buffVfx.ActiveOrNot}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"[BuffVfx] {appearanceID}: Failed to parse CharacterVFX.json: {ex.Message}");
+        }
+    }
+
     // ---- Motion injection -------------------------------------------------
 
     [HarmonyPatch(typeof(SD.CharacterAppearance), nameof(SD.CharacterAppearance.Initialize))]
@@ -168,7 +228,7 @@ public class Motions
     {
         string appearanceID = unitView?._unitModel?.GetAppearanceID() ?? __instance.charInfo.appearanceID;
         Logger.LogInfo($"CharacterAppearance.Initialize called for: {appearanceID} (Source: {(unitView != null ? "Model" : "CharInfo")})");
-        CueExtractor.EagerCacheBuffEffects();
+        CueExtractor.EagerCacheBuffEffects(appearanceID);
         bool hasCustomJSON = MotionData.HasDefinition(appearanceID);
         bool hasCustomBundle = MotionData.HasBundle(appearanceID);
 

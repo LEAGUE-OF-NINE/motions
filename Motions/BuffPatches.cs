@@ -1,113 +1,52 @@
 ﻿using HarmonyLib;
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Motions
 {
-    /// <summary>
-    /// Manages buff aura VFX using the game's native BattleUnitViewAura system.
-    /// When a buff with a registered MOTIONBUFF_ folder is applied to a unit, the corresponding
-    /// prefab is instantiated and managed through the game's aura effect root and dictionary,
-    /// ensuring proper lifecycle (auto-cleanup on death, root enable/disable, etc.).
-    /// </summary>
     internal class BuffPatches
     {
-        /// <summary>
-        /// Hooks BattleUnitView.ViewAbilityTypo to detect when a buff is applied
-        /// or refreshed, and activates the corresponding aura effect through the game's
-        /// BattleUnitViewAura component.
-        /// </summary>
         [HarmonyPatch(typeof(BattleUnitView), nameof(BattleUnitView.ViewAbilityTypo))]
         [HarmonyPostfix]
         public static void TriggerBuffVFX(BattleUnitView __instance, AbilityTriggeredData triggerdData)
         {
             try
             {
-                // Extract the buff keyword from the triggered data
                 BuffTypo typo = null;
                 triggerdData.GetBuffData(out typo);
                 if (typo == null) return;
 
                 BUFF_UNIQUE_KEYWORD keyword = typo.GetBuffKeyword();
-                Logger.LogInfo($"[BuffAura] Buff typo fired for keyword {(int)keyword} ({keyword})");
+                int currentStack = typo.GetBuffStack();
+                int activeRound = typo.GetBuffActiveRound();
 
-                // Check if we have a prefab registered for this buff keyword
-                if (!MotionData.BuffAuraPrefabs.TryGetValue(keyword, out var prefab))
+                if (!MotionData.CreatedAbilityEffects.TryGetValue(keyword, out var cachedAbility))
                     return;
 
-                // Get the unit's BattleUnitViewAura component (the game's native aura system)
-                var aura = __instance.GetComponent<BattleUnitViewAura>();
-                if (aura == null)
-                {
-                    Logger.LogWarning($"[BuffAura] No BattleUnitViewAura component found on unit. " +
-                                      $"Falling back to direct parenting method.");
-                    TriggerBuffVFX_Legacy(__instance, keyword, prefab);
+                if (activeRound == 1)
                     return;
-                }
 
-                // Use the buff keyword as the aura effect key
-                string auraKey = $"MOTIONBUFF_{(int)keyword}";
+                if (cachedAbility == null || cachedAbility.effectObj == null)
+                    return;
 
-                // Check if the aura effect already exists in the game's a  ura dictionary
-                var auraDict = aura._auraEffectDict;
-                if (auraDict != null && auraDict.TryGetValue(auraKey, out var existingObj))
+                BuffVfxEntry vfxEntry = FindVfxEntry(__instance, keyword);
+                if (vfxEntry != null && !vfxEntry.ActiveOrNot)
+                    return;
+
+                var model = __instance._unitModel;
+                string buffString = vfxEntry?.Keyword;
+                int actualStack = (model != null) ? FindBuffStack(model, buffString, keyword) : currentStack;
+
+                if (vfxEntry != null)
                 {
-                    // Effect already exists — reactivate it
-                    if (existingObj != null)
-                    {
-                        if (!existingObj.activeSelf)
-                        {
-                            aura.ActiveAuraEffect(auraKey);
-                            Logger.LogInfo($"[BuffAura] Reactivated existing aura for {(int)keyword}");
-                        }
-                        // Clear and replay particles for a visual "refresh"
-                        foreach (var ps in existingObj.GetComponentsInChildren<ParticleSystem>())
-                        {
-                            ps.Clear();
-                            ps.Play();
-                        }
+                    if (actualStack < vfxEntry.StackThreshold)
                         return;
-                    }
-                    else
-                    {
-                        // Stale null entry — clean it up
-                        auraDict.Remove(auraKey);
-                    }
                 }
-
-                // Create a new aura effect instance
-                bool isFront = MotionData.BuffAuraIsFront.TryGetValue(keyword, out var front) && front;
-
-                // Instantiate the prefab and parent it under the game's aura root
-                var auraRoot = aura._auraEffectRoot;
-                if (auraRoot == null)
-                {
-                    Logger.LogWarning($"[BuffAura] No _auraEffectRoot on BattleUnitViewAura. " +
-                                      $"Falling back to legacy method.");
-                    TriggerBuffVFX_Legacy(__instance, keyword, prefab);
+                else if (actualStack <= 0)
                     return;
-                }
 
-                GameObject instance = UnityEngine.Object.Instantiate(prefab, auraRoot);
-                instance.name = prefab.name;
-                instance.transform.localPosition = Vector3.zero;
-                instance.transform.localRotation = Quaternion.identity;
-                instance.transform.localScale =
-                    Vector3.one * __instance.Appearance.charInfo.transform_Height.localPosition.y * 0.25f;
-
-                // Add to the game's aura dictionary for proper lifecycle management
-                // (OnDieView will auto-cleanup, EnableRoot will toggle visibility, etc.)
-                if (auraDict != null)
-                {
-                    auraDict.Add(auraKey, instance);
-                }
-
-                // Activate through the game's API
-                instance.SetActive(false);
-                aura.ActiveAuraEffect(auraKey);
-
-                Logger.LogInfo($"[BuffAura] Created aura effect for {(int)keyword} " +
-                               $"(isFront={isFront}, parented under _auraEffectRoot)");
+                CreateOrRefreshAura(__instance, keyword, cachedAbility, vfxEntry);
             }
             catch (Exception ex)
             {
@@ -115,17 +54,140 @@ namespace Motions
             }
         }
 
-        /// <summary>
-        /// Fallback for units that don't have a BattleUnitViewAura component.
-        /// Uses the same parenting as the old hacky method but avoids the Effect_Ability list.
-        /// </summary>
-        private static void TriggerBuffVFX_Legacy(
-            BattleUnitView view, BUFF_UNIQUE_KEYWORD keyword, GameObject prefab)
+        [HarmonyPatch(typeof(BattleUnitView), nameof(BattleUnitView.OnRoundStart))]
+        [HarmonyPostfix]
+        public static void OnRoundStart_ManageAuras(BattleUnitView __instance)
         {
-            bool isFront = MotionData.BuffAuraIsFront.TryGetValue(keyword, out var front) && front;
+            try
+            {
+                SyncAurasForView(__instance);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError($"[BuffAura] Error in OnRoundStart_ManageAuras: {ex}");
+            }
+        }
 
-            GameObject instance = UnityEngine.Object.Instantiate(prefab);
-            instance.name = prefab.name;
+        [HarmonyPatch(typeof(StageController), nameof(StageController.StartRound))]
+        [HarmonyPostfix]
+        public static void StartRound_SyncAllAuras()
+        {
+            try
+            {
+                var views = UnityEngine.Object.FindObjectsOfType<BattleUnitView>();
+                foreach (var view in views)
+                {
+                    if (view == null) continue;
+                    SyncAurasForView(view);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError($"[BuffAura] Error in StartRound_SyncAllAuras: {ex}");
+            }
+        }
+
+        private static void SyncAurasForView(BattleUnitView view)
+        {
+            var effects = view._effects_ability;
+            var model = view._unitModel;
+
+            if (model == null && effects == null) return;
+
+            if (effects != null)
+            {
+                for (int i = effects.Count - 1; i >= 0; i--)
+                {
+                    var effect = effects[i];
+                    if (effect == null || effect.effectObj == null)
+                        effects.RemoveAt(i);
+                }
+            }
+
+            if (model == null) return;
+
+            foreach (var kvp in MotionData.CreatedAbilityEffects)
+            {
+                BUFF_UNIQUE_KEYWORD keyword = kvp.Key;
+                var cachedAbility = kvp.Value;
+                if (cachedAbility == null || cachedAbility.effectObj == null) continue;
+
+                BuffVfxEntry vfxEntry = FindVfxEntry(view, keyword);
+                string buffString = vfxEntry?.Keyword;
+                int currentStack = FindBuffStack(model, buffString, keyword);
+
+                bool shouldHaveAura;
+                if (vfxEntry != null)
+                    shouldHaveAura = vfxEntry.ActiveOrNot && currentStack >= vfxEntry.StackThreshold;
+                else
+                    shouldHaveAura = currentStack > 0;
+
+                Effect_Ability existing = null;
+                if (effects != null)
+                {
+                    foreach (var effect in effects)
+                    {
+                        if (effect != null && effect.keyword == keyword)
+                        { existing = effect; break; }
+                    }
+                }
+
+                if (shouldHaveAura && existing == null)
+                {
+                    CreateOrRefreshAura(view, keyword, cachedAbility, vfxEntry);
+                }
+                else if (!shouldHaveAura && existing != null)
+                {
+                    DestroyAura(view, existing);
+                }
+                else if (shouldHaveAura && existing != null)
+                {
+                    if (existing.effectObj != null && !existing.effectObj.activeSelf)
+                        existing.effectObj.SetActive(true);
+                    foreach (var ps in existing.effectObj.GetComponentsInChildren<ParticleSystem>())
+                    { ps.Clear(); ps.Play(); }
+                }
+            }
+        }
+
+        private static BuffVfxEntry FindVfxEntry(BattleUnitView view, BUFF_UNIQUE_KEYWORD keyword)
+        {
+            string appearanceID = view?._unitModel?.GetAppearanceID();
+            if (string.IsNullOrEmpty(appearanceID)) return null;
+            if (!MotionData.BuffVfxEntries.TryGetValue(appearanceID, out var entries)) return null;
+            foreach (var e in entries)
+                if (e.ParsedKeyword == keyword) return e;
+            return null;
+        }
+
+        private static void CreateOrRefreshAura(BattleUnitView view, BUFF_UNIQUE_KEYWORD keyword,
+            Effect_Ability cachedAbility, BuffVfxEntry vfxEntry)
+        {
+            foreach (var effect in view._effects_ability)
+            {
+                if (effect != null && effect.keyword == keyword)
+                {
+                    if (effect.effectObj != null)
+                    {
+                        if (!effect.effectObj.activeSelf)
+                            effect.effectObj.SetActive(true);
+                        foreach (var ps in effect.effectObj.GetComponentsInChildren<ParticleSystem>())
+                        { ps.Clear(); ps.Play(); }
+                    }
+                    return;
+                }
+            }
+
+            GameObject instance = UnityEngine.Object.Instantiate(cachedAbility.effectObj);
+            var ability = new Effect_Ability
+            {
+                keyword = cachedAbility.keyword,
+                effectObj = instance,
+                IsSetOverrideDie = cachedAbility.IsSetOverrideDie
+            };
+
+            bool isFront = vfxEntry?.IsFront
+                ?? (MotionData.BuffAuraIsFront.TryGetValue(keyword, out var f) && f);
 
             instance.transform.SetParent(isFront
                 ? view.viewEffectRootDirection
@@ -135,9 +197,49 @@ namespace Motions
             instance.transform.localScale =
                 Vector3.one * view.Appearance.charInfo.transform_Height.localPosition.y * 0.25f;
 
+            view._effects_ability.Add(ability);
+            instance.SetActive(false);
             instance.SetActive(true);
+        }
 
-            Logger.LogInfo($"[BuffAura] Created legacy aura effect for {(int)keyword}");
+        private static void DestroyAura(BattleUnitView view, Effect_Ability effect)
+        {
+            if (effect == null) return;
+            if (effect.effectObj != null)
+            {
+                effect.effectObj.SetActive(false);
+                UnityEngine.Object.Destroy(effect.effectObj);
+            }
+            view._effects_ability.Remove(effect);
+        }
+
+        private static int FindBuffStack(BattleUnitModel model, string buffStringName, BUFF_UNIQUE_KEYWORD fallbackKeyword)
+        {
+            if (model == null) return 0;
+
+            var allBuffs = model.GetBuffAll();
+            if (allBuffs == null || allBuffs.Count == 0) return 0;
+
+            for (int i = 0; i < allBuffs.Count; i++)
+            {
+                var buff = allBuffs[i];
+                if (buff == null) continue;
+                if (buff._activeRound != 0) continue;
+                string buffName = buff._mainKeyword.ToString();
+                if (!string.IsNullOrEmpty(buffStringName) && buffName == buffStringName)
+                    return buff._stack;
+            }
+
+            for (int i = 0; i < allBuffs.Count; i++)
+            {
+                var buff = allBuffs[i];
+                if (buff == null) continue;
+                if (buff._activeRound != 0) continue;
+                if (buff._mainKeyword == fallbackKeyword)
+                    return buff._stack;
+            }
+
+            return 0;
         }
     }
 }

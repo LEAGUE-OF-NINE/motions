@@ -1,3 +1,4 @@
+using Il2CppInterop.Runtime;
 using Il2CppSystem;
 using System.Collections.Generic;
 using UnityEngine;
@@ -40,32 +41,138 @@ public static class CueExtractor
         MotionData.TimelineCache[key] = instance;
         return instance;
     }
+    /// <summary>
+    /// Pre-loads buff aura prefabs for a specific character appearance.
+    /// When that character has CharacterVFX.json entries, uses VFXName to find the specific prefab.
+    /// Otherwise falls back to auto-discovering the first prefab in MOTIONBUFF_ bundles.
+    /// </summary>
+    public static void EagerCacheBuffEffects(string appearanceID)
+    {
+        var entries = GetEntriesForAppearance(appearanceID);
+
+        if (entries != null && entries.Count > 0)
+        {
+            // CharacterVFX.json format: entries specify the exact VFXName to load
+            foreach (var entry in entries)
+            {
+                var keyword = entry.ParsedKeyword;
+                if (MotionData.BuffAuraPrefabs.ContainsKey(keyword))
+                    continue;
+
+                if (!entry.ActiveOrNot)
+                {
+                    Logger.LogInfo($"[BuffAura] Skipping disabled entry for {entry.Keyword}");
+                    continue;
+                }
+
+                Logger.LogInfo($"[BuffAura] Caching prefab for {entry.Keyword} (ParsedKeyword={(int)keyword}, VFXName={entry.VFXName})");
+
+                var prefab = FindPrefabByName(keyword, entry.VFXName, out bool isFront);
+                if (prefab == null)
+                {
+                    Logger.LogError($"[BuffAura] Couldn't find prefab '{entry.VFXName}' for {entry.Keyword}");
+                    continue;
+                }
+
+                entry.Prefab = prefab;
+                entry.IsFront = isFront;
+                MotionData.BuffAuraPrefabs[keyword] = prefab;
+                MotionData.BuffAuraIsFront[keyword] = isFront;
+                MotionData.CreatedAbilityEffects[keyword] = new Effect_Ability
+                {
+                    keyword = keyword,
+                    effectObj = prefab,
+                    IsSetOverrideDie = false
+                };
+                Logger.LogInfo($"[BuffAura] Cached {entry.VFXName} for {entry.Keyword} (isFront={isFront})");
+            }
+        }
+        else
+        {
+            // Legacy: auto-discover first prefab in MOTIONBUFF_ bundles
+            foreach (var pair in MotionData.LoadedBuffAssets)
+            {
+                BUFF_UNIQUE_KEYWORD keyword = pair.Key;
+
+                if (MotionData.BuffAuraPrefabs.ContainsKey(keyword))
+                    continue;
+
+                Logger.LogInfo($"Caching buff aura prefab for {keyword} ({(int)keyword})");
+
+                var prefab = MotionData.FindBuffAuraPrefab(keyword, out bool isFront);
+                if (prefab == null)
+                {
+                    Logger.LogError($"Couldn't find buff aura prefab for {keyword}");
+                    continue;
+                }
+
+                MotionData.BuffAuraPrefabs.Add(keyword, prefab);
+                MotionData.BuffAuraIsFront.Add(keyword, isFront);
+                MotionData.CreatedAbilityEffects.Add(keyword, new Effect_Ability
+                {
+                    keyword = keyword,
+                    effectObj = prefab,
+                    IsSetOverrideDie = false
+                });
+            }
+        }
+    }
 
     /// <summary>
-    /// Pre-loads buff aura prefabs from bundles into MotionData.BuffAuraPrefabs.
-    /// Called once at battle init. No instantiation — that happens per-unit when the buff is applied.
+    /// Gets BuffVfxEntry list for an appearance from CharacterVFX.json.
     /// </summary>
-    public static void EagerCacheBuffEffects()
+    private static List<BuffVfxEntry> GetEntriesForAppearance(string appearanceID)
     {
-        foreach (var pair in MotionData.LoadedBuffAssets)
+        if (MotionData.BuffVfxEntries.TryGetValue(appearanceID, out var entries) && entries.Count > 0)
+            return entries;
+        return null;
+    }
+
+    /// <summary>
+    /// Finds a specific prefab by name within bundles registered for the given buff keyword.
+    /// </summary>
+    private static GameObject FindPrefabByName(BUFF_UNIQUE_KEYWORD keyword, string vfxName, out bool isFront)
+    {
+        isFront = false;
+
+        if (!MotionData.LoadedBuffAssets.TryGetValue(keyword, out var bundles))
+            return null;
+
+        string target = vfxName.ToLower();
+
+        foreach (var bundle in bundles)
         {
-            BUFF_UNIQUE_KEYWORD keyword = pair.Key;
-
-            if (MotionData.BuffAuraPrefabs.ContainsKey(keyword))
-                continue;
-
-            Logger.LogInfo($"Caching buff aura prefab for {keyword} ({(int)keyword})");
-
-            var prefab = MotionData.FindBuffAuraPrefab(keyword, out bool isFront);
-            if (prefab == null)
+            foreach (var assetName in bundle.AllAssetNames())
             {
-                Logger.LogError($"Couldn't find buff aura prefab for {keyword}");
-                continue;
-            }
+                if (!assetName.EndsWith(".prefab", System.StringComparison.OrdinalIgnoreCase))
+                    continue;
 
-            MotionData.BuffAuraPrefabs.Add(keyword, prefab);
-            MotionData.BuffAuraIsFront.Add(keyword, isFront);
+                string assetNameOnly = System.IO.Path.GetFileNameWithoutExtension(assetName);
+                string assetNameLower = assetNameOnly.ToLower();
+
+                // Match: exact name, or name with optional _Front suffix
+                if (assetNameLower == target || assetNameLower == target + "_front")
+                {
+                    isFront = assetNameOnly.EndsWith("_Front", System.StringComparison.OrdinalIgnoreCase);
+
+                    var asset = bundle.LoadAsset(assetName, Il2CppType.Of<GameObject>());
+                    if (asset != null)
+                        return asset.Cast<GameObject>();
+                }
+
+                // Fuzzy: VFXName appears anywhere in the asset name
+                if (assetNameLower.Contains(target))
+                {
+                    isFront = assetNameOnly.EndsWith("_Front", System.StringComparison.OrdinalIgnoreCase);
+
+                    var asset = bundle.LoadAsset(assetName, Il2CppType.Of<GameObject>());
+                    if (asset != null)
+                        return asset.Cast<GameObject>();
+                }
+            }
         }
+
+        return null;
     }
 
     /// <summary>

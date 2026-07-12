@@ -18,14 +18,26 @@ public static class MotionData
 
     /// <summary>
     /// Cached prefab GameObjects for buff aura VFX, keyed by buff keyword.
-    /// These are the raw prefabs — instantiation happens per-unit at runtime.
     /// </summary>
     public static readonly Dictionary<BUFF_UNIQUE_KEYWORD, GameObject> BuffAuraPrefabs = new();
+
+    /// <summary>
+    /// Cached Effect_Ability wrappers for buff aura VFX, used by BuffPatches.
+    /// </summary>
+    public static readonly Dictionary<BUFF_UNIQUE_KEYWORD, Effect_Ability> CreatedAbilityEffects = new();
 
     /// <summary>
     /// Whether the prefab should render in front of the character (name ends with "_Front").
     /// </summary>
     public static readonly Dictionary<BUFF_UNIQUE_KEYWORD, bool> BuffAuraIsFront = new();
+
+    /// <summary>
+    /// Per-character buff VFX entries, keyed by appearanceID.
+    /// Populated from CharacterVFX.json inside each character's custom_motions folder.
+    /// Fallback: entries under "" (empty string key) come from the root buff_vfx.json.
+    /// When absent, the legacy MOTIONBUFF_ folder auto-discovery is used instead.
+    /// </summary>
+    public static readonly Dictionary<string, List<BuffVfxEntry>> BuffVfxEntries = new();
 
     // ---- Bundle loading ---------------------------------------------------
 
@@ -46,6 +58,12 @@ public static class MotionData
 
     /// <summary>VFX cues extracted from bundle control tracks.</summary>
     public static readonly Dictionary<MotionKey, List<VfxCue>> VfxCueCache = new();
+
+    /// <summary>
+    /// Tracks legacy aura GameObjects created when BattleUnitViewAura is unavailable.
+    /// Outer key: BattleUnitView instance. Inner dict: auraKey -> GameObject.
+    /// </summary>
+    public static readonly Dictionary<BattleUnitView, Dictionary<string, GameObject>> LegacyAuras = new();
 
     /// <summary>Set of timelines we've already stripped/processed so we don't repeat work.</summary>
     public static readonly HashSet<TimelineAsset> ProcessedTimelines = new();
@@ -233,11 +251,21 @@ public static class MotionData
                 bundle.Unload(false);
             }
         }
+        foreach (var bundles in LoadedBuffAssets.Values)
+        {
+            foreach (var bundle in bundles)
+            {
+                if (bundle == null) continue;
+                Logger.LogWarning($"Unloading buff bundle {bundle.name}");
+                bundle.Unload(false);
+            }
+        }
         Logger.LogWarning("Unloading and clearing all custom motions and bundles.");
         LoadedAssets.Clear();
         LoadedBuffAssets.Clear();
         BuffAuraPrefabs.Clear();
         BuffAuraIsFront.Clear();
+        BuffVfxEntries.Clear();
         CustomMotionDefinitions.Clear();
         PatchedCharacters.Clear();
         SoundCueCache.Clear();
@@ -245,4 +273,26 @@ public static class MotionData
         TimelineCache.Clear();
         ProcessedTimelines.Clear();
     }
+}
+
+/// <summary>
+/// A single buff VFX mapping entry, parsed from custom_motions/buff_vfx.json.
+/// </summary>
+[System.Serializable]
+public class BuffVfxEntry
+{
+    public string Keyword;
+    public int StackThreshold;
+    public int TurnThreshold;
+    public bool ActiveOrNot = true;
+    public string VFXName;
+
+    [System.NonSerialized]
+    public BUFF_UNIQUE_KEYWORD ParsedKeyword;
+
+    [System.NonSerialized]
+    public GameObject Prefab;
+
+    [System.NonSerialized]
+    public bool IsFront;
 }
