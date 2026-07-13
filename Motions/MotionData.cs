@@ -28,6 +28,9 @@ public static class MotionData
     /// <summary>appearanceID -> (MOTION_DETAIL -> jsonPath)</summary>
     public static readonly Dictionary<string, Dictionary<MOTION_DETAIL, string>> CustomMotionDefinitions = new();
 
+    /// <summary>appearanceID -> jsonPath</summary>
+    public static readonly Dictionary<string, string> CustomAppearanceVFX = new();
+
     // ---- Caches ----------------------------------------------------------
 
     /// <summary>Cloned timeline instances, keyed by (appearance, motion, coin index).</summary>

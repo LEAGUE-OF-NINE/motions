@@ -48,8 +48,8 @@ public class Motions
                     // directory custom_motions:
                     foreach (var charDir in Directory.GetDirectories(motionsRoot))
                     {
-                        if (charDir.Contains("MOTIONBUFF_"))
-                        {
+                            if (charDir.Contains("MOTIONBUFF_"))
+                            {
                                 string buffId = Path.GetFileName(charDir).Remove(0, 11);
                                 Logger.LogWarning($"Discovered directory for Buff: [{buffId}] at path: {charDir}");
 
@@ -73,13 +73,37 @@ public class Motions
                                     Logger.LogWarning($"Loaded motion bundle {bundle.name} for keyword {(int)keyword} ({buffId})");
                                 }
                                 continue;
-                        }
+                            }
+
+                
 
                         string appearanceID = Path.GetFileName(charDir);
                         Logger.LogWarning($"Discovered directory for ID: [{appearanceID}] at path: {charDir}");
+                            // Discover CharacterVFX JSON definitions
+                            foreach (string characterVFXPath in Directory.GetFiles(charDir, "CharacterVFX*.json", SearchOption.AllDirectories))
+                            {
+                                Logger.LogWarning($"Discovered CharacterVFX JSON: {characterVFXPath}");
 
-                        // Load bundles for this character
-                        foreach (var bundlePath in Directory.GetFiles(charDir, "*.bundle", SearchOption.AllDirectories))
+                                if (!MotionData.CustomAppearanceVFX.ContainsKey(appearanceID))
+                                    MotionData.CustomAppearanceVFX.Add(appearanceID, characterVFXPath);
+
+                                CharacterVFX characterVFX = CharVFXParse.Parse(characterVFXPath);
+
+                                if (characterVFX != null)
+                                {
+                                    foreach (CharVFX entry in characterVFX.allVFX)
+                                    {
+                                        Logger.LogInfo(
+                                            $"Keyword={entry.keyword}, " +
+                                            $"Stack={entry.stackThres}, " +
+                                            $"Turns={entry.turnThres}, " +
+                                            $"Active={entry.active}, " +
+                                            $"VFX={entry.vfxName}");
+                                    }
+                                }
+                            }
+                            // Load bundles for this character
+                            foreach (var bundlePath in Directory.GetFiles(charDir, "*.bundle", SearchOption.AllDirectories))
                         {
                             Logger.LogInfo($"Loading bundle for {appearanceID}: {bundlePath}");
                             var bundle = UnityEngine.AssetBundle.LoadFromFile(bundlePath, 0);
