@@ -5,6 +5,7 @@
   - [Creating Your First Motion](YourFirstMotion.md)
   - [Attacks](Attacks.md)
   - [SFX](SFX.md)
+  - [VFX](VFX.md)
 - [Reference](Reference.md)
   - [Mod Layout](ModLayout.md)
   - [Bundles](Bundles.md)

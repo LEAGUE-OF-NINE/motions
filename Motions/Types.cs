@@ -39,6 +39,18 @@ public struct MotionKey : IEquatable<MotionKey>
     public MOTION_DETAIL Motion;
     public int Index;
 
+    /// <summary>
+    /// Indices 0 and -1 both name the base bundle asset ('s1', not 's1_1'), so they must share one
+    /// entry: cue extraction strips tracks out of the shared bundle asset, and only the first clone
+    /// of it sees any cues. Only index > 0 selects a distinct 'name_N' asset.
+    /// </summary>
+    public static MotionKey Create(string appearanceID, MOTION_DETAIL motion, int index) => new()
+    {
+        AppearanceID = appearanceID,
+        Motion = motion,
+        Index = index > 0 ? index : -1
+    };
+
     public bool Equals(MotionKey other)
     {
         return string.Equals(AppearanceID, other.AppearanceID) &&
