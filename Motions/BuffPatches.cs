@@ -31,6 +31,7 @@ namespace Motions
                     return;
 
                 BuffVfxEntry vfxEntry = FindVfxEntry(__instance, keyword);
+
                 if (vfxEntry != null && !vfxEntry.ActiveOrNot)
                     return;
 
@@ -47,7 +48,9 @@ namespace Motions
                         return;
                 }
                 else if (actualStack <= 0)
+                {
                     return;
+                }
 
                 CreateOrRefreshAura(__instance, keyword, cachedAbility, vfxEntry);
             }
@@ -61,32 +64,18 @@ namespace Motions
         [HarmonyPostfix]
         public static void OnRoundStart_ManageAuras(BattleUnitView __instance)
         {
-            try
-            {
-                SyncAurasForView(__instance);
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError($"[BuffAura] Error in OnRoundStart_ManageAuras: {ex}");
-            }
+            SyncAurasForView(__instance);
         }
 
         [HarmonyPatch(typeof(StageController), nameof(StageController.StartRound))]
         [HarmonyPostfix]
         public static void StartRound_SyncAllAuras()
         {
-            try
+            var views = UnityEngine.Object.FindObjectsOfType<BattleUnitView>();
+            foreach (var view in views)
             {
-                var views = UnityEngine.Object.FindObjectsOfType<BattleUnitView>();
-                foreach (var view in views)
-                {
-                    if (view == null) continue;
-                    SyncAurasForView(view);
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError($"[BuffAura] Error in StartRound_SyncAllAuras: {ex}");
+                if (view == null) continue;
+                SyncAurasForView(view);
             }
         }
 
@@ -95,7 +84,8 @@ namespace Motions
             var effects = view._effects_ability;
             var model = view._unitModel;
 
-            if (model == null && effects == null) return;
+            if (model == null && effects == null)
+                return;
 
             if (effects != null)
             {
@@ -107,7 +97,8 @@ namespace Motions
                 }
             }
 
-            if (model == null) return;
+            if (model == null)
+                return;
 
             foreach (var kvp in MotionData.CreatedAbilityEffects)
             {
@@ -139,13 +130,9 @@ namespace Motions
                 }
 
                 if (shouldHaveAura && existing == null)
-                {
                     CreateOrRefreshAura(view, keyword, cachedAbility, vfxEntry);
-                }
                 else if (!shouldHaveAura && existing != null)
-                {
                     DestroyAura(view, existing);
-                }
                 else if (shouldHaveAura && existing != null)
                 {
                     if (existing.effectObj != null && !existing.effectObj.activeSelf)
@@ -159,10 +146,13 @@ namespace Motions
         private static BuffVfxEntry FindVfxEntry(BattleUnitView view, BUFF_UNIQUE_KEYWORD keyword)
         {
             string appearanceID = view?._unitModel?.GetAppearanceID();
-            if (string.IsNullOrEmpty(appearanceID)) return null;
-            if (!MotionData.BuffVfxEntries.TryGetValue(appearanceID, out var entries)) return null;
+            if (string.IsNullOrEmpty(appearanceID))
+                return null;
+            if (!MotionData.BuffVfxEntries.TryGetValue(appearanceID, out var entries))
+                return null;
             foreach (var e in entries)
-                if (e.ParsedKeyword == keyword) return e;
+                if (e.ParsedKeyword == keyword)
+                    return e;
             return null;
         }
 
@@ -224,7 +214,8 @@ namespace Motions
             if (model == null) return 0;
 
             var allBuffs = model.GetBuffAll();
-            if (allBuffs == null || allBuffs.Count == 0) return 0;
+            if (allBuffs == null || allBuffs.Count == 0)
+                return 0;
 
             for (int i = 0; i < allBuffs.Count; i++)
             {
@@ -253,7 +244,8 @@ namespace Motions
             if (model == null) return 0;
 
             var allBuffs = model.GetBuffAll();
-            if (allBuffs == null || allBuffs.Count == 0) return 0;
+            if (allBuffs == null || allBuffs.Count == 0)
+                return 0;
 
             for (int i = 0; i < allBuffs.Count; i++)
             {
