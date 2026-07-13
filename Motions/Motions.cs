@@ -119,6 +119,7 @@ public class Motions
                                     MotionData.CustomMotionDefinitions[appearanceID].Add(detail, jsonPath);
                                     Logger.LogInfo($"Discovered motion definition: {appearanceID} -> {skillName} -> {jsonPath}");
                                 }
+
                             }
                         }
                     }
@@ -274,30 +275,17 @@ public class Motions
                 bool hasJSON = jsonPath != null;
                 bool isSkill = motionName.StartsWith("S");
 
-                if (hasJSON || isSkill)
+                // A motion the character has no timeline for is never dispatched by the game, so a
+                // bundle timeline alone is enough reason to inject: it registers the motion slot.
+                bool hasBundleTimeline = MotionData.FindTimelineForAppearance(appearanceID, detail) != null;
+
+                if (hasJSON || isSkill || hasBundleTimeline)
                     MotionInjector.InjectCustomMotion(__instance, detail, jsonPath, appearanceID, allVfxTracks);
             }
         }
     }
 
     // ---- ChangeMotion hooks -----------------------------------------------
-
-    [HarmonyPatch(typeof(SD.CharacterAppearance), nameof(SD.CharacterAppearance.ChangeMotion))]
-    [HarmonyPrefix]
-    private static void ChangeMotion(SD.CharacterAppearance __instance, MOTION_DETAIL motiondetail, int index)
-    {
-        try
-        {
-            var motion = __instance.GetMotion(motiondetail);
-            if (motion == null || motion.timelineAssets == null) return;
-
-            MotionInjector.PlayCustomMotion(__instance, motiondetail, index);
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError($"Error in ChangeMotion hook: {ex}");
-        }
-    }
 
     [HarmonyPatch(typeof(SD.CharacterAppearance), nameof(SD.CharacterAppearance.ChangeMotion))]
     [HarmonyPostfix]
@@ -311,6 +299,22 @@ public class Motions
                 __instance.SetDisableTrail(true);
                 __instance.SetDisableSpine(true);
             }
+
+            var motion = __instance.GetMotion(motiondetail);
+            if (motion == null || motion.timelineAssets == null) return;
+
+            // Skills index the motion's timelines by coin, so the game's index already says which bundle
+            // asset to play. Other motions come in with -1 and the game chooses; the choice is readable
+            // from the name of the timeline it just assigned to the master.
+            int resolved = index;
+            if (!motiondetail.ToString().StartsWith("S"))
+            {
+                int variant = TimelineBuilder.GetVariantIndex(__instance._playableDirector?.playableAsset?.name);
+                if (variant > 0)
+                    resolved = variant;
+            }
+
+            MotionInjector.PlayCustomMotion(__instance, motiondetail, resolved);
         }
         catch (Exception ex)
         {

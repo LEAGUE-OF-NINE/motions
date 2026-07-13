@@ -1,0 +1,190 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Skill Motion Definition",
+  "type": "object",
+  "properties": {
+    "coins": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/CoinData" }
+    }
+  },
+  "required": ["coins"],
+  "definitions": {
+    "CoinData": {
+      "type": "object",
+      "properties": {
+        "totalDuration": { "type": "number", "minimum": 0 },
+        "phases": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/SkillPhase" }
+        },
+        "hitCheckers": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/HitCheckerData" }
+        },
+        "zooms": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/ZoomData" }
+        },
+        "rotates": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/RotateData" }
+        },
+        "shakes": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/ShakeData" }
+        },
+        "vfx": {
+          "type": "array",
+          "items": { "type": "integer", "minimum": 1 },
+          "description": "1-indexed indices into the character's original VFX track list (logged at startup)"
+        }
+      },
+      "required": ["totalDuration", "phases"]
+    },
+    "ShakeData": {
+      "type": "object",
+      "properties": {
+        "start": { "type": "number", "minimum": 0, "maximum": 1, "default": 0 },
+        "duration": { "type": "number", "minimum": 0, "default": 0.5 },
+        "intensity": { "type": "number", "default": 0.15 },
+        "decay": { "type": "number", "default": 3.0 }
+      }
+    },
+    "ZoomData": {
+      "type": "object",
+      "properties": {
+        "start": { "type": "number", "minimum": 0, "maximum": 1, "default": 0 },
+        "duration": { "type": "number", "minimum": 0, "default": 0.5 },
+        "attacker": { "type": "boolean", "default": true },
+        "targets": { "type": "boolean", "default": true },
+        "between": { "type": "number", "default": 0.0 },
+        "axisY": { "type": "number", "default": 0.0 },
+        "size": { "type": "number", "default": -2.0 },
+        "zoomDuration": { "type": "number", "default": -1.0 },
+        "isRelative": { "type": "boolean", "default": true },
+        "focusSpeed": { "type": "number", "default": 0.2 },
+        "easeType": { "$ref": "#/definitions/EaseType" }
+      }
+    },
+    "RotateData": {
+      "type": "object",
+      "properties": {
+        "start": { "type": "number", "minimum": 0, "maximum": 1, "default": 0 },
+        "duration": { "type": "number", "minimum": 0, "default": 0.5 },
+        "targetAngle": { "$ref": "#/definitions/Vec3Data" },
+        "focusRotateSpeed": { "type": "number", "default": 0.2 },
+        "easeType": { "$ref": "#/definitions/EaseType" }
+      }
+    },
+    "EaseType": {
+      "type": "string",
+      "enum": [
+        "Unset",
+        "Linear",
+        "InSine",
+        "OutSine",
+        "InOutSine",
+        "InQuad",
+        "OutQuad",
+        "InOutQuad",
+        "InCubic",
+        "OutCubic",
+        "InOutCubic",
+        "InQuart",
+        "OutQuart",
+        "InOutQuart",
+        "InQuint",
+        "OutQuint",
+        "InOutQuint",
+        "InExpo",
+        "OutExpo",
+        "InOutExpo",
+        "InCirc",
+        "OutCirc",
+        "InOutCirc",
+        "InElastic",
+        "OutElastic",
+        "InOutElastic",
+        "InBack",
+        "OutBack",
+        "InOutBack",
+        "InBounce",
+        "OutBounce",
+        "InOutBounce"
+      ],
+      "default": "Unset"
+    },
+    "SkillPhase": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "enum": ["Relative", "ToTargetWide", "GiveDamage", "MoveEnemy"]
+        },
+        "start": { "type": "number", "minimum": 0, "maximum": 1 },
+        "end": { "type": "number", "minimum": 0, "maximum": 1 },
+        "steps": { "type": "integer", "minimum": 1 },
+        "move": { "$ref": "#/definitions/Vec3Data" },
+        "isRefreshDir": { "type": "boolean" },
+        "damage": { "$ref": "#/definitions/DamageData" },
+        "damageRatio": { "type": "number", "minimum": 0, "maximum": 1 },
+        "sturn": { "$ref": "#/definitions/SturnData" }
+      },
+      "required": ["type", "start", "end", "steps"]
+    },
+    "HitCheckerData": {
+      "type": "object",
+      "properties": {
+        "time": { "type": "number", "minimum": 0, "maximum": 1, "default": 0 },
+        "isNextMotionCoinDelay": { "type": "number", "default": 0 }
+      }
+    },
+    "Vec3Data": {
+      "type": "object",
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "z": { "type": "number" }
+      }
+    },
+    "DamageData": {
+      "type": "object",
+      "properties": {
+        "multiHit": { "type": "integer", "minimum": 1, "default": 1 },
+        "isUpAttack": { "type": "boolean", "default": false },
+        "multiHitDuration": { "type": "number", "default": 0 }
+      }
+    },
+    "SturnData": {
+      "type": "object",
+      "properties": {
+        "sturnType": {
+          "type": "string",
+          "enum": ["AIRBORNE", "KNOCKBACK", "HOLDING", "STURN", "NONE"],
+          "default": "KNOCKBACK"
+        },
+        "sturnDir": {
+          "type": "string",
+          "enum": [
+            "DIR_ACTOR",
+            "DIR_TARGET",
+            "DIR_TOACTOR",
+            "DIR_TOTARGET",
+            "NONE"
+          ],
+          "default": "DIR_TOTARGET"
+        },
+        "sturnTiming": {
+          "type": "string",
+          "enum": ["ALL", "FIRST", "LAST", "NONE"],
+          "default": "ALL"
+        },
+        "forcePower": { "type": "number", "default": 5.0 },
+        "randomPower": { "type": "number", "default": 5.0 },
+        "airborneAngle": { "type": "number", "default": 0.0 },
+        "isRotateTarget": { "type": "boolean", "default": false },
+        "targetRotateAngle": { "type": "number", "default": 0.0 }
+      }
+    }
+  }
+}
