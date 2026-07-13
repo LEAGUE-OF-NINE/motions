@@ -36,11 +36,14 @@ namespace Motions
 
                 var model = __instance._unitModel;
                 string buffString = vfxEntry?.Keyword;
-                int actualStack = (model != null) ? FindBuffStack(model, buffString, keyword) : currentStack;
+                int actualStack = (model != null) ? FindStack(model, buffString, keyword) : currentStack;
+                int actualTurn = (model != null) ? FindTurnCount(model, buffString, keyword) : activeRound;
 
                 if (vfxEntry != null)
                 {
                     if (actualStack < vfxEntry.StackThreshold)
+                        return;
+                    if (actualTurn < vfxEntry.TurnThreshold)
                         return;
                 }
                 else if (actualStack <= 0)
@@ -114,11 +117,14 @@ namespace Motions
 
                 BuffVfxEntry vfxEntry = FindVfxEntry(view, keyword);
                 string buffString = vfxEntry?.Keyword;
-                int currentStack = FindBuffStack(model, buffString, keyword);
+                int currentStack = FindStack(model, buffString, keyword);
+                int currentTurn = FindTurnCount(model, buffString, keyword);
 
                 bool shouldHaveAura;
                 if (vfxEntry != null)
-                    shouldHaveAura = vfxEntry.ActiveOrNot && currentStack >= vfxEntry.StackThreshold;
+                    shouldHaveAura = vfxEntry.ActiveOrNot
+                        && currentStack >= vfxEntry.StackThreshold
+                        && currentTurn >= vfxEntry.TurnThreshold;
                 else
                     shouldHaveAura = currentStack > 0;
 
@@ -213,7 +219,7 @@ namespace Motions
             view._effects_ability.Remove(effect);
         }
 
-        private static int FindBuffStack(BattleUnitModel model, string buffStringName, BUFF_UNIQUE_KEYWORD fallbackKeyword)
+        private static int FindStack(BattleUnitModel model, string buffStringName, BUFF_UNIQUE_KEYWORD fallbackKeyword)
         {
             if (model == null) return 0;
 
@@ -237,6 +243,35 @@ namespace Motions
                 if (buff._activeRound != 0) continue;
                 if (buff._mainKeyword == fallbackKeyword)
                     return buff._stack;
+            }
+
+            return 0;
+        }
+
+        private static int FindTurnCount(BattleUnitModel model, string buffStringName, BUFF_UNIQUE_KEYWORD fallbackKeyword)
+        {
+            if (model == null) return 0;
+
+            var allBuffs = model.GetBuffAll();
+            if (allBuffs == null || allBuffs.Count == 0) return 0;
+
+            for (int i = 0; i < allBuffs.Count; i++)
+            {
+                var buff = allBuffs[i];
+                if (buff == null) continue;
+                if (buff._activeRound != 0) continue;
+                string buffName = buff._mainKeyword.ToString();
+                if (!string.IsNullOrEmpty(buffStringName) && buffName == buffStringName)
+                    return buff._turn;
+            }
+
+            for (int i = 0; i < allBuffs.Count; i++)
+            {
+                var buff = allBuffs[i];
+                if (buff == null) continue;
+                if (buff._activeRound != 0) continue;
+                if (buff._mainKeyword == fallbackKeyword)
+                    return buff._turn;
             }
 
             return 0;
