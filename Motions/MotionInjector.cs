@@ -20,10 +20,37 @@ public static class MotionInjector
     {
         try
         {
-            TimelineAsset bundleTimeline = MotionData.FindTimelineForAppearance(appearanceID, motionDetail);
-            var customTimelines = TimelineBuilder.GetTimelines(motionDetail.ToString(), jsonPath, bundleTimeline, appearanceID, allVfxTracks);
+            string motionName = motionDetail.ToString();
 
-            if (customTimelines == null || customTimelines.Count == 0)
+            // For skills the game selects a timeline by coin index, so 'name_N' bundle assets are coins
+            // and GetTimelines already emits one timeline per coin. Other motions are dispatched with
+            // index -1 - the game picks a variant itself - so 'name_N' assets are variants instead, and
+            // each needs its own master timeline in the motion's list for the game to have anything to
+            // pick from. The variant index is encoded in the timeline name so we can recover the pick.
+            var bundleTimelines = new System.Collections.Generic.List<TimelineAsset>
+            {
+                MotionData.FindTimelineForAppearance(appearanceID, motionDetail)
+            };
+
+            if (!motionName.StartsWith("S"))
+            {
+                for (int variant = 1; ; variant++)
+                {
+                    var extra = MotionData.FindTimelineForAppearance(appearanceID, motionDetail, variant);
+                    if (extra == null) break;
+                    bundleTimelines.Add(extra);
+                }
+            }
+
+            var customTimelines = new System.Collections.Generic.List<TimelineAsset>();
+            for (int variant = 0; variant < bundleTimelines.Count; variant++)
+            {
+                var built = TimelineBuilder.GetTimelines(motionName, jsonPath, bundleTimelines[variant], appearanceID, allVfxTracks, variant);
+                if (built != null)
+                    customTimelines.AddRange(built);
+            }
+
+            if (customTimelines.Count == 0)
                 return;
 
             foreach (var tl in customTimelines)
@@ -112,12 +139,7 @@ public static class MotionInjector
         var syncScript = sandboxTransform?.GetComponent<SidecarSyncBehavior>();
         if (syncScript == null) return;
 
-        var key = new MotionKey
-        {
-            AppearanceID = appearanceID,
-            Motion = motiondetail,
-            Index = index
-        };
+        var key = MotionKey.Create(appearanceID, motiondetail, index);
 
         // GetOrCacheTimeline populates SoundCueCache/VfxCueCache as a side effect,
         // so reading caches after this call is safe.

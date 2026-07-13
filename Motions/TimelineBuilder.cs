@@ -10,6 +10,27 @@ namespace Motions;
 
 public static class TimelineBuilder
 {
+    private const string NamePrefix = "Custom_Created_";
+
+    /// <summary>
+    /// Recovers the variant index encoded in a built timeline's name, or -1 if it isn't one of ours.
+    /// Lets us see which variant the game picked by reading the master director's asset.
+    /// </summary>
+    public static int GetVariantIndex(string timelineName)
+    {
+        if (string.IsNullOrEmpty(timelineName) || !timelineName.StartsWith(NamePrefix))
+            return -1;
+
+        int start = timelineName.IndexOf("_Var", StringComparison.Ordinal);
+        if (start < 0) return -1;
+        start += 4;
+
+        int end = timelineName.IndexOf('_', start);
+        if (end < 0) end = timelineName.Length;
+
+        return int.TryParse(timelineName.Substring(start, end - start), out int variant) ? variant : -1;
+    }
+
     // The interop Newtonsoft.Json is an Il2Cpp proxy and can't deserialize into
     // managed plugin types, so we use the runtime's System.Text.Json instead.
     // Lenient options match Newtonsoft's tolerance of comments/trailing commas.
@@ -19,6 +40,22 @@ public static class TimelineBuilder
         AllowTrailingCommas = true,
         ReadCommentHandling = JsonCommentHandling.Skip
     };
+
+    public static SkillData LoadSkillData(string jsonPath)
+    {
+        if (string.IsNullOrEmpty(jsonPath) || !File.Exists(jsonPath))
+            return null;
+
+        try
+        {
+            return JsonSerializer.Deserialize<SkillData>(File.ReadAllText(jsonPath), JsonOptions);
+        }
+        catch (System.Exception ex)
+        {
+            Logger.LogError($"[TimelineBuilder] JSON deserialize failed: {ex}");
+            return null;
+        }
+    }
 
     public static void AddHitChecker(TrackAsset track, double time, bool isCanNextMotion, float isNextMotionCoinDelay)
     {
@@ -296,45 +333,27 @@ public static class TimelineBuilder
     /// Clones the original timeline, keeps it intact, but prunes the contents of specific tracks.
     /// Returns a list of timelines, one for each coin, with graduated hitmarkers.
     /// </summary>
-    public static System.Collections.Generic.List<TimelineAsset> GetTimelines(string timelineName, string jsonPath, TimelineAsset bundleTimeline = null, string appearanceID = null, System.Collections.Generic.List<TrackAsset> originalVfxTracks = null)
+    public static System.Collections.Generic.List<TimelineAsset> GetTimelines(string timelineName, string jsonPath, TimelineAsset bundleTimeline = null, string appearanceID = null, System.Collections.Generic.List<TrackAsset> originalVfxTracks = null, int variantIndex = 0)
     {
         // 1. Load JSON data
-        SkillData data = null;
-        if (!string.IsNullOrEmpty(jsonPath) && File.Exists(jsonPath))
-        {
-            try
-            {
-                string json = File.ReadAllText(jsonPath);
-                data = JsonSerializer.Deserialize<SkillData>(json, JsonOptions);
-            }
-            catch (System.Exception ex)
-            {
-                Logger.LogError($"[TimelineBuilder] JSON deserialize failed: {ex}");
-            }
-        }
-        else
-        {
-            // If No JSON, return a dummy coin to clear default game logic (mostly for skills)
-            data = new SkillData
-            {
-                coins = new CoinData[]
-                {
-                    new CoinData
-                    {
-                        totalDuration = bundleTimeline != null ? bundleTimeline.duration : 1.0,
-                        phases = new SkillPhase[0],
-                        hitCheckers = new HitCheckerData[0]
-                    }
-                }
-            };
-        }
+        SkillData data = LoadSkillData(jsonPath);
 
         var timelines = new System.Collections.Generic.List<TimelineAsset>();
 
+        // No JSON, or a JSON carrying only settings: fall back to a dummy coin, which both clears the
+        // game's default logic and keeps the bundle's own timeline injectable.
         if (data == null || data.coins == null || data.coins.Length == 0)
         {
-            Logger.LogWarning("[TimelineBuilder] No coin data found in JSON. Returning empty list.");
-            return timelines;
+            data ??= new SkillData();
+            data.coins = new CoinData[]
+            {
+                new CoinData
+                {
+                    totalDuration = bundleTimeline != null ? bundleTimeline.duration : 1.0,
+                    phases = new SkillPhase[0],
+                    hitCheckers = new HitCheckerData[0]
+                }
+            };
         }
 
         for (int coinIdx = 0; coinIdx < data.coins.Length; coinIdx++)
@@ -346,7 +365,7 @@ public static class TimelineBuilder
                 targetDuration = bundleTimeline.duration;
 
             TimelineAsset dummyTimeline = ScriptableObject.CreateInstance<TimelineAsset>();
-            dummyTimeline.name = $"Custom_Created_{timelineName}_Coin_{coinIdx}";
+            dummyTimeline.name = $"{NamePrefix}{timelineName}_Var{variantIndex}_Coin_{coinIdx}";
 
             int animTrackIdx = 0;
 
@@ -412,6 +431,11 @@ public static class TimelineBuilder
                     }
                 }
             }
+
+            // Without this the timeline's length collapses to its longest clip, which cuts short any
+            // motion whose clips don't span the whole duration (parries, guard).
+            dummyTimeline.durationMode = TimelineAsset.DurationMode.FixedLength;
+            dummyTimeline.fixedDuration = targetDuration;
 
             timelines.Add(dummyTimeline);
         }

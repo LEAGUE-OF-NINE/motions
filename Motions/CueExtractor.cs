@@ -17,12 +17,7 @@ public static class CueExtractor
     /// </summary>
     public static TimelineAsset GetOrCacheTimeline(string appearanceID, MOTION_DETAIL detail, int index = -1)
     {
-        var key = new MotionKey
-        {
-            AppearanceID = appearanceID,
-            Motion = detail,
-            Index = index
-        };
+        var key = MotionKey.Create(appearanceID, detail, index);
 
         if (MotionData.TimelineCache.TryGetValue(key, out var cached))
             return cached;
@@ -77,22 +72,20 @@ public static class CueExtractor
     }
 
     /// <summary>
-    /// Pre-populates timeline and VFX caches for all skill-type motions (coins 0-100).
-    /// Called at battle-init to avoid mid-combat lag on first play.
+    /// Pre-populates timeline and VFX caches for every motion the bundle provides, across the indices
+    /// the game can ask for: -1 and 0 (the base asset) plus each 'name_N' coin/variant until one is
+    /// missing. Called at battle-init to avoid mid-combat lag on first play.
     /// </summary>
     public static void EagerCacheMotions(string appearanceID)
     {
         foreach (var detailObj in System.Enum.GetValues(typeof(MOTION_DETAIL)))
         {
             MOTION_DETAIL detail = (MOTION_DETAIL)detailObj;
-            string motionName = detail.ToString();
 
-            if (!motionName.StartsWith("S")) continue;
+            if (GetOrCacheTimeline(appearanceID, detail, -1) == null) continue;
+            GetOrCacheTimeline(appearanceID, detail, 0);
 
-            for (int i = 0; i <= 100; i++)
-            {
-                GetOrCacheTimeline(appearanceID, detail, i);
-            }
+            for (int i = 1; GetOrCacheTimeline(appearanceID, detail, i) != null; i++) { }
         }
         Logger.LogInfo($"[EagerCache] Pre-populated timeline/VFX caches for {appearanceID}.");
     }
@@ -101,12 +94,7 @@ public static class CueExtractor
 
     public static void ExtractSoundCues(TimelineAsset timeline, string appearanceID, MOTION_DETAIL motion, int index)
     {
-        var key = new MotionKey
-        {
-            AppearanceID = appearanceID,
-            Motion = motion,
-            Index = index
-        };
+        var key = MotionKey.Create(appearanceID, motion, index);
 
         if (MotionData.SoundCueCache.ContainsKey(key)) return;
 
@@ -141,12 +129,7 @@ public static class CueExtractor
 
     public static void ExtractVfxCues(TimelineAsset timeline, string appearanceID, MOTION_DETAIL motion, int index)
     {
-        var key = new MotionKey
-        {
-            AppearanceID = appearanceID,
-            Motion = motion,
-            Index = index
-        };
+        var key = MotionKey.Create(appearanceID, motion, index);
 
         if (MotionData.VfxCueCache.ContainsKey(key)) return;
 
