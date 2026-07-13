@@ -4,24 +4,6 @@ Motions can also attach a looping VFX prefab to a unit while it has one of
 Lethe's custom buffs — the kind of aura that sits behind a character while a
 status is active.
 
-## How it works
-
-The mod integrates with the game's native `BattleUnitViewAura` system, which is
-the same component the base game uses for buff-triggered visual auras. This means:
-
-- Effects are parented under the game's dedicated `_auraEffectRoot` transform
-- Effects are registered in `_auraEffectDict` for proper lifecycle management
-- Cleanup on death is handled automatically by `OnDieView()`
-- The aura root visibility is controlled by `EnableRoot(bool)`
-
-When a buff is applied or refreshed, the mod:
-
-1. Looks up the buff keyword in its cache of registered aura prefabs
-2. Gets the unit's `BattleUnitViewAura` component
-3. Creates the aura through the game's system (instantiate → parent under aura root → add to dict → activate)
-
-## Folder structure
-
 Name the folder after the buff, prefixed with `MOTIONBUFF_`:
 
 ```
