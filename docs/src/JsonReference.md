@@ -153,11 +153,14 @@ If you leave `hitCheckers` out, Motions inserts one at `0.15` of the coin.
 ## shakes
 
 ```json
-"shakes": [{ "start": 0.3, "duration": 0.2, "intensity": 0.15 }]
+"shakes": [{ "start": 0.3, "duration": 0.2, "strength": 0.25 }]
 ```
 
 | Field | Type | Default |
 |---|---|---|
 | `start` | fraction | — |
 | `duration` | seconds | — |
-| `intensity` | float | `0.15` |
+| `strength` | float | `0.25` |
+| `vibrato` | int | `120` |
+| `randomness` | float | `90` |
+| `fadeOut` | bool | `true` |
