@@ -97,10 +97,10 @@ public static class TimelineBuilder
             var marker = track.CreateMarker(Il2CppType.Of<CharacterAppearanceMarker_CameraShaker>(), time);
             var shaker = marker.Cast<CharacterAppearanceMarker_CameraShaker>();
             shaker.duration = (float)shake.duration;
-            shaker.strength = shake.intensity;
-            shaker.vibrato = 10;
-            shaker.randomness = 90f;
-            shaker.fadeOut = true;
+            shaker.strength = shake.strength;
+            shaker.vibrato = shake.vibrato;
+            shaker.randomness = shake.randomness;
+            shaker.fadeOut = shake.fadeOut;
         }
     }
 

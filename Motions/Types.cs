@@ -169,8 +169,10 @@ public class ShakeData
 {
     public double start;
     public double duration;
-    public float intensity = 0.15f;
-    public float decay = 3.0f;
+    public float strength = 0.25f;
+    public int vibrato = 120;
+    public float randomness = 90f;
+    public bool fadeOut = true;
 }
 
 [System.Serializable]
