@@ -47,8 +47,10 @@
       "properties": {
         "start": { "type": "number", "minimum": 0, "maximum": 1, "default": 0 },
         "duration": { "type": "number", "minimum": 0, "default": 0.5 },
-        "intensity": { "type": "number", "default": 0.15 },
-        "decay": { "type": "number", "default": 3.0 }
+        "strength": { "type": "number", "default": 0.25 },
+        "vibrato": { "type": "integer", "default": 120 },
+        "randomness": { "type": "number", "default": 90 },
+        "fadeOut": { "type": "boolean", "default": true }
       }
     },
     "ZoomData": {
