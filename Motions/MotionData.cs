@@ -31,6 +31,12 @@ public static class MotionData
     /// <summary>appearanceID -> jsonPath</summary>
     public static readonly Dictionary<string, string> CustomAppearanceVFX = new();
 
+    /// <summary>appearanceID -> parsed CharacterVFX.json. Parsed once instead of on every ability typo.</summary>
+    public static readonly Dictionary<string, CharacterVFX> AppearanceVFXCache = new();
+
+    /// <summary>"appearanceID/vfxName" -> prefab (null if absent), so bundles aren't rescanned per ability typo.</summary>
+    public static readonly Dictionary<string, GameObject> AppearanceVFXPrefabs = new();
+
     // ---- Caches ----------------------------------------------------------
 
     /// <summary>Cloned timeline instances, keyed by (appearance, motion, coin index).</summary>
@@ -227,9 +233,20 @@ public static class MotionData
                 bundle.Unload(false);
             }
         }
+        foreach (var bundles in LoadedBuffAssets.Values)
+        {
+            foreach (var bundle in bundles)
+            {
+                if (bundle == null) continue;
+                Logger.LogWarning($"Unloading buff bundle {bundle.name}");
+                bundle.Unload(false);
+            }
+        }
         Logger.LogWarning("Unloading and clearing all custom motions and bundles.");
         LoadedAssets.Clear();
         LoadedBuffAssets.Clear();
+        AppearanceVFXCache.Clear();
+        AppearanceVFXPrefabs.Clear();
         CustomMotionDefinitions.Clear();
         PatchedCharacters.Clear();
         SoundCueCache.Clear();
