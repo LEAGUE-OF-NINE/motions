@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using FX;
 using Il2CppInterop.Runtime;
 using UnityEngine;
 using UnityEngine.Timeline;
@@ -16,28 +17,7 @@ public static class MotionData
 
     public static readonly Dictionary<BUFF_UNIQUE_KEYWORD, List<AssetBundle>> LoadedBuffAssets = new();
 
-    /// <summary>
-    /// Cached prefab GameObjects for buff aura VFX, keyed by buff keyword.
-    /// </summary>
-    public static readonly Dictionary<BUFF_UNIQUE_KEYWORD, GameObject> BuffAuraPrefabs = new();
-
-    /// <summary>
-    /// Cached Effect_Ability wrappers for buff aura VFX, used by BuffPatches.
-    /// </summary>
     public static readonly Dictionary<BUFF_UNIQUE_KEYWORD, Effect_Ability> CreatedAbilityEffects = new();
-
-    /// <summary>
-    /// Whether the prefab should render in front of the character (name ends with "_Front").
-    /// </summary>
-    public static readonly Dictionary<BUFF_UNIQUE_KEYWORD, bool> BuffAuraIsFront = new();
-
-    /// <summary>
-    /// Per-character buff VFX entries, keyed by appearanceID.
-    /// Populated from CharacterVFX.json inside each character's custom_motions folder.
-    /// Fallback: entries under "" (empty string key) come from the root buff_vfx.json.
-    /// When absent, the legacy MOTIONBUFF_ folder auto-discovery is used instead.
-    /// </summary>
-    public static readonly Dictionary<string, List<BuffVfxEntry>> BuffVfxEntries = new();
 
     // ---- Bundle loading ---------------------------------------------------
 
@@ -47,6 +27,9 @@ public static class MotionData
 
     /// <summary>appearanceID -> (MOTION_DETAIL -> jsonPath)</summary>
     public static readonly Dictionary<string, Dictionary<MOTION_DETAIL, string>> CustomMotionDefinitions = new();
+
+    /// <summary>appearanceID -> jsonPath</summary>
+    public static readonly Dictionary<string, string> CustomAppearanceVFX = new();
 
     // ---- Caches ----------------------------------------------------------
 
@@ -59,12 +42,6 @@ public static class MotionData
     /// <summary>VFX cues extracted from bundle control tracks.</summary>
     public static readonly Dictionary<MotionKey, List<VfxCue>> VfxCueCache = new();
 
-    /// <summary>
-    /// Tracks legacy aura GameObjects created when BattleUnitViewAura is unavailable.
-    /// Outer key: BattleUnitView instance. Inner dict: auraKey -> GameObject.
-    /// </summary>
-    public static readonly Dictionary<BattleUnitView, Dictionary<string, GameObject>> LegacyAuras = new();
-
     /// <summary>Set of timelines we've already stripped/processed so we don't repeat work.</summary>
     public static readonly HashSet<TimelineAsset> ProcessedTimelines = new();
 
@@ -72,6 +49,15 @@ public static class MotionData
     public static readonly HashSet<SD.CharacterAppearance> PatchedCharacters = new();
 
     // ---- Queries ---------------------------------------------------------
+
+    public static List<AssetBundle> GetAssetBundlesFromAppearance(string appearanceID)
+    {
+        if (LoadedAssets.ContainsKey(appearanceID))
+        {
+            return LoadedAssets[appearanceID];
+        }
+        return null;
+    }
 
     public static bool HasDefinition(string appearanceID)
         => CustomMotionDefinitions.ContainsKey(appearanceID);
@@ -156,14 +142,8 @@ public static class MotionData
         return null;
     }
 
-    /// <summary>
-    /// Loads the first prefab found in bundles for a given buff keyword.
-    /// Also records whether the prefab name ends with "_Front" for front/back placement.
-    /// </summary>
-    public static GameObject FindBuffAuraPrefab(BUFF_UNIQUE_KEYWORD keyword, out bool isFront)
+    public static GameObject FindPrefabAssetBuff(BUFF_UNIQUE_KEYWORD keyword)
     {
-        isFront = false;
-
         if (!LoadedBuffAssets.TryGetValue(keyword, out var bundles))
             return null;
 
@@ -174,11 +154,7 @@ public static class MotionData
                 if (!assetName.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
                     continue;
 
-                // Extract just the asset name (no path/extension) for the _Front check
-                string assetNameOnly = System.IO.Path.GetFileNameWithoutExtension(assetName);
-                isFront = assetNameOnly.EndsWith("_Front", StringComparison.OrdinalIgnoreCase);
-
-                Logger.LogWarning($"Loading buff aura prefab {assetName} (isFront={isFront})");
+                Logger.LogWarning($"Loading prefab {assetName}");
 
                 var asset = bundle.LoadAsset(assetName, Il2CppType.Of<GameObject>());
                 if (asset != null)
@@ -251,21 +227,9 @@ public static class MotionData
                 bundle.Unload(false);
             }
         }
-        foreach (var bundles in LoadedBuffAssets.Values)
-        {
-            foreach (var bundle in bundles)
-            {
-                if (bundle == null) continue;
-                Logger.LogWarning($"Unloading buff bundle {bundle.name}");
-                bundle.Unload(false);
-            }
-        }
         Logger.LogWarning("Unloading and clearing all custom motions and bundles.");
         LoadedAssets.Clear();
         LoadedBuffAssets.Clear();
-        BuffAuraPrefabs.Clear();
-        BuffAuraIsFront.Clear();
-        BuffVfxEntries.Clear();
         CustomMotionDefinitions.Clear();
         PatchedCharacters.Clear();
         SoundCueCache.Clear();
@@ -273,26 +237,4 @@ public static class MotionData
         TimelineCache.Clear();
         ProcessedTimelines.Clear();
     }
-}
-
-/// <summary>
-/// A single buff VFX mapping entry, parsed from custom_motions/buff_vfx.json.
-/// </summary>
-[System.Serializable]
-public class BuffVfxEntry
-{
-    public string Keyword;
-    public int StackThreshold;
-    public int TurnThreshold;
-    public bool ActiveOrNot = true;
-    public string VFXName;
-
-    [System.NonSerialized]
-    public BUFF_UNIQUE_KEYWORD ParsedKeyword;
-
-    [System.NonSerialized]
-    public GameObject Prefab;
-
-    [System.NonSerialized]
-    public bool IsFront;
 }

@@ -11,3 +11,4 @@
   - [Bundles](Bundles.md)
   - [JSON](JsonReference.md)
   - [Buff VFX](BuffVfx.md)
+  - [Character VFX](CharacterVFX.md)

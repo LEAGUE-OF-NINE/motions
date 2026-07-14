@@ -34,7 +34,7 @@ public static class TimelineBuilder
     // The interop Newtonsoft.Json is an Il2Cpp proxy and can't deserialize into
     // managed plugin types, so we use the runtime's System.Text.Json instead.
     // Lenient options match Newtonsoft's tolerance of comments/trailing commas.
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    public static readonly JsonSerializerOptions JsonOptions = new()
     {
         IncludeFields = true,
         AllowTrailingCommas = true,

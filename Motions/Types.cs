@@ -90,6 +90,22 @@ public class DamageData
 }
 
 [System.Serializable]
+public class CharVFX
+{
+    public string keyword;
+    public int stackThres;
+    public int turnThres;
+    public bool active;
+    public string vfxName;
+}
+
+[System.Serializable]
+public class CharacterVFX
+{
+    public CharVFX[] allVFX;
+}
+
+[System.Serializable]
 public class SturnData
 {
     public string sturnType = "KNOCKBACK";
