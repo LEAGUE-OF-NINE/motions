@@ -63,6 +63,42 @@ namespace Motions
             return false;
         }
 
+        /// <summary>Parsed-once lookup of a character's CharacterVFX.json.</summary>
+        private static CharacterVFX GetVFX(string appearanceID)
+        {
+            if (MotionData.AppearanceVFXCache.TryGetValue(appearanceID, out var cached))
+                return cached;
+
+            MotionData.CustomAppearanceVFX.TryGetValue(appearanceID, out string jsonPath);
+            var parsed = jsonPath != null ? Parse(jsonPath) : null;
+
+            MotionData.AppearanceVFXCache[appearanceID] = parsed; // negative results cached too
+            return parsed;
+        }
+
+        /// <summary>Bundle lookup for a VFX prefab, scanned once per (appearance, vfxName).</summary>
+        private static GameObject GetPrefab(string appearanceID, string vfxName)
+        {
+            string key = appearanceID + "/" + vfxName;
+            if (MotionData.AppearanceVFXPrefabs.TryGetValue(key, out var cached))
+                return cached;
+
+            GameObject prefab = null;
+            var bundles = MotionData.GetAssetBundlesFromAppearance(appearanceID);
+            if (bundles != null)
+            {
+                foreach (var bundle in bundles)
+                {
+                    prefab = FindGameObjectInBundle(bundle, vfxName);
+                    if (prefab != null)
+                        break;
+                }
+            }
+
+            MotionData.AppearanceVFXPrefabs[key] = prefab;
+            return prefab;
+        }
+
         public static GameObject FindGameObjectInBundle(AssetBundle bundle, string vfxName)
         {
             foreach (var assetName in bundle.AllAssetNames())
@@ -91,15 +127,24 @@ namespace Motions
         [HarmonyPatch(typeof(BattleUnitView), nameof(BattleUnitView.ViewAbilityTypo))]
         [HarmonyPostfix]
         public static void CharacterAppearanceVFXHandler(BattleUnitView __instance, AbilityTriggeredData triggerdData)
+            => SyncVFX(__instance);
+
+        // Buffs that lapse or drop below their threshold never raise a typo, so the aura would stay
+        // up until the next unrelated trigger. Re-sync at round start to catch that.
+        [HarmonyPatch(typeof(BattleUnitView), nameof(BattleUnitView.OnRoundStart))]
+        [HarmonyPostfix]
+        public static void CharacterAppearanceVFXRoundStart(BattleUnitView __instance)
+            => SyncVFX(__instance);
+
+        private static void SyncVFX(BattleUnitView __instance)
         {
-            if (!MotionData.CustomAppearanceVFX.ContainsKey(__instance.unitModel.GetAppearanceID()))
-            {
-                Logger.LogError($"Character {__instance.unitModel.GetName()} is not valid for vfx with appearance {__instance.unitModel.GetAppearanceID()}");
+            string appearanceID = __instance?.unitModel?.GetAppearanceID();
+            if (string.IsNullOrEmpty(appearanceID))
                 return;
-            }
-            string jsonPath;
-            MotionData.CustomAppearanceVFX.TryGetValue(__instance.unitModel.GetAppearanceID(), out jsonPath);
-            CharacterVFX characterVFX = Parse(jsonPath);
+
+            CharacterVFX characterVFX = GetVFX(appearanceID);
+            if (characterVFX == null)
+                return;
 
             var allAttr = characterVFX.allVFX;
 
@@ -167,24 +212,21 @@ namespace Motions
                     }
                 }
 
-                GameObject prefab = null;
-
                 // find prefab for dominant entry
-                foreach (var bundle in MotionData.GetAssetBundlesFromAppearance(__instance.unitModel.GetAppearanceID()))
-                {
-                    prefab = FindGameObjectInBundle(bundle, selected.vfxName);
-
-                    if (prefab != null)
-                        break;
-                }
+                GameObject prefab = GetPrefab(appearanceID, selected.vfxName);
 
                 if (prefab == null)
                     continue;
+
+                // Instantiate renames the clone to "<name>(Clone)", so the front/back check has to
+                // read the source prefab's name, not the instance's.
+                bool isFront = prefab.name.EndsWith("_Front", StringComparison.OrdinalIgnoreCase);
+
                 // copy paste from buff
                 GameObject charVfxInstance = UnityEngine.Object.Instantiate(prefab);
 
                 charVfxInstance.transform.SetParent(
-                    charVfxInstance.name.EndsWith("_Front")
+                    isFront
                         ? __instance.viewEffectRootDirection
                         : __instance.viewEffectRootBack);
 
