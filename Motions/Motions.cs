@@ -87,6 +87,7 @@ public class Motions
                                 if (!MotionData.CustomAppearanceVFX.ContainsKey(appearanceID))
                                     MotionData.CustomAppearanceVFX.Add(appearanceID, characterVFXPath);
 
+                                /*
                                 CharacterVFX characterVFX = CharVFXParse.Parse(characterVFXPath);
 
                                 if (characterVFX != null)
@@ -101,6 +102,7 @@ public class Motions
                                             $"VFX={entry.vfxName}");
                                     }
                                 }
+                                */
                             }
                             // Load bundles for this character
                             foreach (var bundlePath in Directory.GetFiles(charDir, "*.bundle", SearchOption.AllDirectories))

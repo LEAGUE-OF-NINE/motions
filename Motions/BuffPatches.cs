@@ -17,6 +17,7 @@ namespace Motions
             Logger.LogInfo("[VIEWABILITYTYPOPATCH] Entered patch");
             BuffTypo typo = null;
             triggerdData.GetBuffData(out typo);
+            if (typo == null) return;
             BUFF_UNIQUE_KEYWORD keyword = typo.GetBuffKeyword();
             Logger.LogInfo($"[VIEWABILITYTYPO] Instance this time is {keyword} (tostring) {keyword.ToString()}");
             if (!MotionData.CreatedAbilityEffects.TryGetValue(keyword, out var cachedAbility))

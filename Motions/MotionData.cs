@@ -50,6 +50,15 @@ public static class MotionData
 
     // ---- Queries ---------------------------------------------------------
 
+    public static List<AssetBundle> GetAssetBundlesFromAppearance(string appearanceID)
+    {
+        if (LoadedAssets.ContainsKey(appearanceID))
+        {
+            return LoadedAssets[appearanceID];
+        }
+        return null;
+    }
+
     public static bool HasDefinition(string appearanceID)
         => CustomMotionDefinitions.ContainsKey(appearanceID);
 
