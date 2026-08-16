@@ -20,7 +20,7 @@ Initially, `S1.json` looks like this:
 
 ```json
 {
-  "$schema": "https://raw.githubusercontent.com/LEAGUE-OF-NINE/motions-schema/refs/heads/main/schema.json",
+  "$schema": "https://raw.githubusercontent.com/LEAGUE-OF-NINE/motions/refs/heads/main/schema/schema.json",
   "coins": [
     {
       "totalDuration": 0.0,
@@ -120,7 +120,7 @@ The coin ends at `0.15s`, so the hitChecker is:
 
 ```json
 {
-  "$schema": "https://raw.githubusercontent.com/LEAGUE-OF-NINE/motions-schema/refs/heads/main/schema.json",
+  "$schema": "https://raw.githubusercontent.com/LEAGUE-OF-NINE/motions/refs/heads/main/schema/schema.json",
   "coins": [
     {
       "totalDuration": 0.15,
@@ -210,7 +210,7 @@ Make a file called `S2.json` in the mod folder with the json below.
 
 ```json
 {
-  "$schema": "https://raw.githubusercontent.com/LEAGUE-OF-NINE/motions-schema/refs/heads/main/schema.json",
+  "$schema": "https://raw.githubusercontent.com/LEAGUE-OF-NINE/motions/refs/heads/main/schema/schema.json",
   "coins": [
     {
       "totalDuration": 1.0,

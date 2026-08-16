@@ -13,7 +13,7 @@ array:
 
 ```json
 {
-  "$schema": "https://raw.githubusercontent.com/LEAGUE-OF-NINE/motions-schema/refs/heads/main/charactervfx.json",
+  "$schema": "https://raw.githubusercontent.com/LEAGUE-OF-NINE/motions/refs/heads/main/schema/charactervfx.json",
   "allVFX": [ ... ],
   "props": [
     {
@@ -489,7 +489,7 @@ That `$schema` line on the first field is worth adding: `CharacterVFX.json`
 has its own schema, the same way a coin JSON does:
 
 ```json
-"$schema": "https://raw.githubusercontent.com/LEAGUE-OF-NINE/motions-schema/refs/heads/main/charactervfx.json"
+"$schema": "https://raw.githubusercontent.com/LEAGUE-OF-NINE/motions/refs/heads/main/schema/charactervfx.json"
 ```
 
 VS Code (and anything else that reads `$schema`) then autocompletes every

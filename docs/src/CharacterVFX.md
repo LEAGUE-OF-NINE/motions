@@ -13,7 +13,7 @@ custom_motions/
 The `.json` file is formatted as such:
 ```json
 {
-    "$schema": "https://raw.githubusercontent.com/LEAGUE-OF-NINE/motions-schema/refs/heads/main/charactervfx.json",
+    "$schema": "https://raw.githubusercontent.com/LEAGUE-OF-NINE/motions/refs/heads/main/schema/charactervfx.json",
     "allVFX": [
         {
             "keyword": "Breath",

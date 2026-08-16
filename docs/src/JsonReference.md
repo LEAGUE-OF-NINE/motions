@@ -7,7 +7,7 @@ list of what you can put in it.
 Add the schema line for autocompletion in VSCode:
 
 ```json
-"$schema": "https://raw.githubusercontent.com/LEAGUE-OF-NINE/motions-schema/refs/heads/main/schema.json"
+"$schema": "https://raw.githubusercontent.com/LEAGUE-OF-NINE/motions/refs/heads/main/schema/schema.json"
 ```
 
 ## Time is a fraction, not seconds
