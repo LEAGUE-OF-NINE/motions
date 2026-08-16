@@ -36,6 +36,7 @@ public class Plugin : BasePlugin
         harmony.PatchAll(typeof(BuffPatches));
         harmony.PatchAll(typeof(CharVFXParse));
         harmony.PatchAll(typeof(ScreenBorderPatches));
+        harmony.PatchAll(typeof(CustomBattleSkillView_er));
         MainClass.consequenceDict["customslotvfx"] = new DashboardInstantiation();
     }
 }
