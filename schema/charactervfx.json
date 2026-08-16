@@ -1,0 +1,253 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Character VFX and Props",
+  "description": "CharacterVFX.json: buff-gated VFX overlays and spawnable props for one appearance.",
+  "type": "object",
+  "properties": {
+    "$schema": { "type": "string", "description": "This schema's URL, so editors validate as you type." },
+    "allVFX": {
+      "type": "array",
+      "description": "Buff-gated VFX overlays, matched against the character's own buffs.",
+      "items": { "$ref": "#/definitions/CharVFX" }
+    },
+    "props": {
+      "type": "array",
+      "description": "Spawnable visual objects: rings, thrown instances, planted world objects.",
+      "items": { "$ref": "#/definitions/PropEntry" }
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "Vec3": {
+      "type": "array",
+      "description": "[x, y, z]. Shorter arrays are padded with zeroes at load.",
+      "items": { "type": "number" },
+      "minItems": 0,
+      "maxItems": 3
+    },
+
+    "CharVFX": {
+      "type": "object",
+      "properties": {
+        "keyword": {
+          "type": "string",
+          "description": "Buff keyword this overlay is gated on, read off the character wearing it."
+        },
+        "stackThres": {
+          "type": "integer",
+          "default": 0,
+          "description": "Stack the buff needs before the gate passes. Falling short of either threshold fails outright."
+        },
+        "turnThres": { "type": "integer", "default": 0, "description": "Turn count the buff needs." },
+        "active": {
+          "type": "boolean",
+          "default": false,
+          "description": "false hides the overlay while this entry is the selected one for its keyword."
+        },
+        "vfxName": {
+          "type": "string",
+          "description": "GameObject name inside any bundle under this appearance."
+        },
+        "_comment": { "type": "string" }
+      },
+      "required": ["keyword", "vfxName"],
+      "additionalProperties": false
+    },
+
+    "PropEntry": {
+      "type": "object",
+      "description": "One prop declaration. Needs either 'folder' or 'prefab'; folder wins when both are set.",
+      "properties": {
+        "folder": {
+          "type": "string",
+          "description": "PNG folder, resolved relative to THIS json, not the mod root. e.g. \"props/knife\"."
+        },
+        "prefab": {
+          "type": "string",
+          "description": "GameObject name inside any bundle under this appearance. Ignored when 'folder' is set."
+        },
+
+        "anchor": {
+          "enum": ["unit", "world", "target"],
+          "default": "unit",
+          "description": "unit: rings the character. world: one instance placed in the scene. target: a ring around every ENEMY carrying this entry's keyword, sized by that enemy's own stack (takes no actions)."
+        },
+        "front": {
+          "type": "boolean",
+          "default": true,
+          "description": "Unit anchor: parent to the front effect root rather than the back one. Also picks the default sorting order."
+        },
+
+        "pos": {
+          "$ref": "#/definitions/Vec3",
+          "description": "unit: ring centre, local to the effect root. world: placement point. target: offset from the enemy's own position."
+        },
+        "world": {
+          "type": "boolean",
+          "default": false,
+          "description": "World anchor only: read 'pos' as absolute scene coordinates instead of caster-relative."
+        },
+
+        "layer": { "type": "string", "default": "Front", "description": "Sorting layer name applied to every renderer." },
+        "order": {
+          "type": "integer",
+          "default": 0,
+          "description": "Sorting order. 0 means the default for this anchor and side: 1000 in front, 998 behind. Characters sit near 1000, so a low value draws behind them."
+        },
+        "scale": {
+          "type": "number",
+          "default": 1,
+          "description": "Uniform size multiplier. 0 or less reads as 1: an invisible prop is indistinguishable from a failed load."
+        },
+
+        "count": {
+          "type": "integer",
+          "default": 1,
+          "minimum": 0,
+          "description": "Instance count when there is no 'keyword'. Clamped to maxCount and to 16. For a world anchor, only whether its single persistent instance exists at all; use 0 for plant-only."
+        },
+        "maxCount": {
+          "type": "integer",
+          "default": 16,
+          "description": "Ceiling on instances, itself clamped to 16. 0 means \"no ceiling of my own\" (i.e. 16), NOT zero instances."
+        },
+
+        "radius": { "type": "number", "default": 0, "description": "Ring radius." },
+        "parkRadius": {
+          "type": "number",
+          "default": 0,
+          "description": "Ring radius while parked, for a formation that hangs wider around an enemy than it orbits its caster. 0 means \"same as radius\"."
+        },
+        "speed": { "type": "number", "default": 0, "description": "Degrees per second around the ring. 0 pins every slot. Negative reverses." },
+        "phase": { "type": "number", "default": 0, "description": "Ring start angle, in degrees." },
+        "bob": { "type": "number", "default": 0, "description": "Vertical bob amplitude. Needs bobPeriod set too." },
+        "bobPeriod": { "type": "number", "default": 0, "minimum": 0, "description": "Bob period in seconds. 0 disables bobbing even if bob is set." },
+        "spin": { "type": "number", "default": 0, "description": "Self-rotation, degrees per second." },
+        "face": {
+          "type": "boolean",
+          "default": false,
+          "description": "TARGET anchor only: point every instance at the unit it orbits. On a strike, use the action-level 'face' instead."
+        },
+
+        "keyword": {
+          "type": "string",
+          "description": "Buff keyword gating the prop. On a unit/world anchor it is read off the CASTER and the instance count becomes the buff's stack; on a target anchor it is read off each ENEMY. Omit for an always-on prop."
+        },
+        "stackThres": { "type": "integer", "default": 0, "description": "Stack the buff needs before the gate passes." },
+        "turnThres": { "type": "integer", "default": 0, "description": "Turn count the buff needs." },
+
+        "parkUntil": {
+          "enum": ["battle", "round"],
+          "default": "battle",
+          "description": "How long a parked instance stays parked. round also snaps every parked slot home at the next round start."
+        },
+
+        "actions": {
+          "type": "array",
+          "description": "strike and plant behaviours. Rejected outright on a target-anchored entry.",
+          "items": { "$ref": "#/definitions/PropAction" }
+        },
+
+        "_comment": { "type": "string" }
+      },
+      "anyOf": [
+        { "required": ["folder"] },
+        { "required": ["prefab"] }
+      ],
+      "if": { "properties": { "anchor": { "const": "target" } }, "required": ["anchor"] },
+      "then": {
+        "properties": { "actions": { "maxItems": 0 } },
+        "description": "A target ring follows its keyword, not the motion clock, so an action on one would be silently ignored."
+      },
+      "additionalProperties": false
+    },
+
+    "PropAction": {
+      "type": "object",
+      "description": "A strike moves ring instances to a target; a plant spawns a standalone world instance and forgets it.",
+      "properties": {
+        "do": {
+          "enum": ["strike", "plant"],
+          "default": "strike",
+          "description": "Anything other than \"plant\" is treated as a strike."
+        },
+        "motion": {
+          "type": "string",
+          "description": "A MOTION_DETAIL name, the same string your S1.json / S2.json file is named after. An unknown name logs a warning at load and never fires."
+        },
+        "coin": { "type": "integer", "default": -1, "description": "Which coin of that motion. -1 matches any." },
+        "slot": {
+          "type": "string",
+          "default": "next",
+          "pattern": "^([aA][lL][lL]|[nN][eE][xX][tT]|[0-9]+)$",
+          "description": "Strike only. \"next\" hands the i-th matching action the i-th slot, \"all\" moves every slot, or a 0-based index. Anything else is rejected at load."
+        },
+
+        "start": { "type": "number", "minimum": 0, "maximum": 1, "default": 0, "description": "Fraction of the motion at which it starts moving out." },
+        "arrive": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0,
+          "description": "Fraction at which it reaches its target. MUST equal the coin's GiveDamage phase start, or the hit and the prop disagree."
+        },
+        "returnAt": {
+          "type": "number",
+          "minimum": -1,
+          "maximum": 1,
+          "default": -1,
+          "description": "Fraction at which it is home again. Negative means consumed on arrival instead of returning."
+        },
+        "at": { "type": "number", "minimum": 0, "maximum": 1, "default": 0, "description": "Plant only: fraction at which the instance is placed." },
+
+        "to": {
+          "enum": ["enemy", "enemies", "group", "center", "self", "slot"],
+          "default": "enemy",
+          "description": "enemy: the first target. enemies: one target per slot, dealt round-robin. group: the average position of every target. center: midpoint of caster and first target. self: the caster. slot: the prop's own ring position (a recall, which also un-parks it)."
+        },
+        "offset": { "$ref": "#/definitions/Vec3", "description": "World-space offset added to the target point." },
+        "from": {
+          "enum": ["slot", "self", "center", "enemy", "enemies", "group"],
+          "default": "slot",
+          "description": "Where the strike launches from. \"slot\" is its own ring position, or for a parked prop wherever it is standing."
+        },
+        "fromOffset": { "$ref": "#/definitions/Vec3", "description": "World-space offset on the launch point." },
+        "pos": { "$ref": "#/definitions/Vec3", "description": "Plant only: offset from the 'to' anchor, or an absolute position when the entry has \"world\": true." },
+
+        "ease": {
+          "enum": ["InQuad", "OutQuad", "InOutQuad", "Linear"],
+          "description": "Case-insensitive. Anything unrecognized, including omitting it, is linear. These four only, not the DOTween list."
+        },
+        "arc": { "type": "number", "default": 0, "description": "World units the flight path bows. Zero at both ends, peaks mid-flight. Not applied to a wind-up draw-back." },
+        "windUp": { "type": "number", "default": 0, "description": "World units drawn back away from the target before the throw." },
+        "windUpTime": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.3, "description": "How much of the outbound window the draw-back takes. Ignored when windUp is 0." },
+        "face": { "type": "boolean", "default": false, "description": "Rotate the instance to lead along its travel. Ignored if this action sets 'spin'. On a \"ring\" park it keeps re-aiming at the park point." },
+        "spin": { "type": "number", "default": 0, "description": "Degrees per second of self-rotation while this action runs, overriding the entry's ambient spin. Beats 'face'." },
+
+        "consume": {
+          "enum": ["motion", "gate"],
+          "default": "motion",
+          "description": "What a consumed instance does afterwards. Only applies when returnAt is negative. \"gate\" keeps it gone until the gate's count changes; on a fixed-count entry that is the rest of the battle."
+        },
+        "park": {
+          "enum": ["ring", "hold", "stack"],
+          "description": "Strike only. Ends by leaving the instance where it landed, outliving the motion. ring: keeps orbiting the park point. hold: frozen at the angle it arrived wearing. stack: every parked slot on the point itself. Cannot be combined with returnAt."
+        },
+        "rounds": {
+          "type": "integer",
+          "default": 1,
+          "description": "Plant only: how many rounds the placed instance survives. 0 or less means until the battle ends."
+        },
+
+        "_comment": { "type": "string" }
+      },
+      "required": ["motion"],
+      "if": { "required": ["park"] },
+      "then": {
+        "properties": { "returnAt": { "exclusiveMaximum": 0 } },
+        "description": "park and returnAt are two different endings; setting both is rejected at load."
+      },
+      "additionalProperties": false
+    }
+  }
+}

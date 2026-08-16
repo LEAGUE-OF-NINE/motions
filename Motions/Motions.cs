@@ -21,6 +21,8 @@ public class Motions
     {
         ClassInjector.RegisterTypeInIl2Cpp<SidecarSyncBehavior>();
         ClassInjector.RegisterTypeInIl2Cpp<MoveEnemyMarker>();
+        ClassInjector.RegisterTypeInIl2Cpp<PropRig>();
+        ClassInjector.RegisterTypeInIl2Cpp<PropWorldDriver>();
         harmony.PatchAll(typeof(Motions));
     }
 
@@ -221,6 +223,9 @@ public class Motions
         // Bundle-free sprite motions from motions/<Motion>/
         SpriteMotionLoader.LoadCharacterFolder(charDir, appearanceID);
 
+        // Props, from the props array in the CharacterVFX JSON discovered above.
+        PropLoader.LoadCharacterProps(charDir, appearanceID);
+
         // Discover JSON definitions
         foreach (var detailObj in Enum.GetValues(typeof(MOTION_DETAIL)))
         {
@@ -310,10 +315,11 @@ public class Motions
         bool hasCustomJSON = MotionData.HasDefinition(appearanceID);
         bool hasCustomBundle = MotionData.HasBundle(appearanceID);
         bool hasSpriteMotion = MotionData.HasSpriteMotion(appearanceID);
+        bool hasProps = MotionData.HasProps(appearanceID);
 
-        if (hasCustomJSON || hasCustomBundle || hasSpriteMotion)
+        if (hasCustomJSON || hasCustomBundle || hasSpriteMotion || hasProps)
         {
-            if (hasCustomBundle || hasSpriteMotion)
+            if (hasCustomBundle || hasSpriteMotion || hasProps)
             {
                 Logger.LogInfo($"Custom motion source registered for {appearanceID}, attaching sidecar on init.");
                 MotionInjector.AttachSidecar(__instance, appearanceID);

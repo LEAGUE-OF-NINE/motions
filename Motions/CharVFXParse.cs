@@ -74,7 +74,7 @@ namespace Motions
         }
 
         /// <summary>Bundle lookup for a VFX prefab, scanned once per (appearance, vfxName).</summary>
-        private static GameObject GetPrefab(string appearanceID, string vfxName)
+        internal static GameObject GetPrefab(string appearanceID, string vfxName)
         {
             string key = appearanceID + "/" + vfxName;
             if (MotionData.AppearanceVFXPrefabs.TryGetValue(key, out var cached))
@@ -124,12 +124,19 @@ namespace Motions
         [HarmonyPatch(typeof(BattleUnitView), nameof(BattleUnitView.ViewAbilityTypo))]
         [HarmonyPostfix]
         public static void CharacterAppearanceVFXHandler(BattleUnitView __instance, AbilityTriggeredData triggerdData)
-            => SyncVFX(__instance);
+        {
+            PropTargetRings.ViewToken++;
+            SyncVFX(__instance);
+        }
 
         [HarmonyPatch(typeof(BattleUnitView), nameof(BattleUnitView.OnRoundStart))]
         [HarmonyPostfix]
         public static void CharacterAppearanceVFXRoundStart(BattleUnitView __instance)
-            => SyncVFX(__instance);
+        {
+            PropTargetRings.ViewToken++;
+            SyncVFX(__instance);
+            PropWorld.OnRoundStart();
+        }
 
         private static void SyncVFX(BattleUnitView __instance)
         {

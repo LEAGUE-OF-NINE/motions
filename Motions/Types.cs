@@ -107,6 +107,8 @@ public class CharVFX
 public class CharacterVFX
 {
     public CharVFX[] allVFX;
+    /// <summary>Spawnable objects. PropEntry lives in PropSpec.cs, which stays UnityEngine-free.</summary>
+    public PropEntry[] props;
 }
 
 [System.Serializable]

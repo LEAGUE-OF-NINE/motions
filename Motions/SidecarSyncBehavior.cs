@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using FMOD;
+using Il2CppInterop.Runtime.Attributes;
 using UnityEngine;
 using UnityEngine.Playables;
 using UnityEngine.Timeline;
@@ -29,6 +30,38 @@ public class SidecarSyncBehavior : MonoBehaviour
     public bool IsModdedSkillActive = false;
     public bool ShouldSync = true;
 
+    /// <summary>What PlayCustomMotion last started, so props can match their actions to it.</summary>
+    public MOTION_DETAIL CurrentMotion;
+    public int CurrentCoin = -1;
+    /// <summary>Length of the slave's own asset. Only the timebase when nothing is syncing us.</summary>
+    public double MotionDuration;
+
+    /// <summary>
+    /// The length action fractions are measured against.
+    /// <para>
+    /// While ShouldSync is set, Update copies MasterDirector.time straight into the slave, so the
+    /// numerator is master time and the denominator has to be the master's asset to match: the
+    /// timeline TimelineBuilder built, whose fixedDuration is the coin's totalDuration - the base
+    /// every phase, hit checker, shake and zoom fraction in this project is expressed against.
+    /// </para><para>
+    /// MotionDuration is the slave's asset instead - for a bundle mod, the bundle's own animation,
+    /// of unrelated length. Dividing master time by it scaled every prop action by
+    /// totalDuration/bundleDuration, so a strike authored for its GiveDamage phase landed early or
+    /// late by whatever the bundle was. Unsynced motions run the slave on its own clock, where
+    /// MotionDuration is right and is the fallback.
+    /// </para>
+    /// </summary>
+    public double ActionTimebase()
+    {
+        if (ShouldSync && MasterDirector != null)
+        {
+            var asset = MasterDirector.playableAsset;
+            if (asset != null && asset.duration > 0) return asset.duration;
+        }
+
+        return MotionDuration;
+    }
+
     /// <summary>Bundle-free playback. Null when the motion came from a bundle.</summary>
     public Sprite[] Frames;
     public double[] FrameTimes;
@@ -38,7 +71,8 @@ public class SidecarSyncBehavior : MonoBehaviour
     public void ResetFrameCursor() => _frameCursor = 0;
 
 
-    private Transform GetFirstTargetTransform()
+    /// <summary>The transform of the first current target, or null. Public because props strike it.</summary>
+    public Transform GetFirstTargetTransform()
     {
         try
         {
@@ -55,6 +89,34 @@ public class SidecarSyncBehavior : MonoBehaviour
         return null;
     }
 
+    /// <summary>
+    /// Positions of every current target, appended to <paramref name="into"/>. Public because a prop
+    /// strike can spread across them or aim at their middle, and GetFirstTargetTransform drops
+    /// everything past the first. Positions not transforms: one interop pass per frame, not per slot.
+    /// </summary>
+    [HideFromIl2Cpp]
+    public void GetTargetPositions(System.Collections.Generic.List<Vector3> into)
+    {
+        try
+        {
+            if (Appearance == null) return;
+            var view = Appearance.GetView();
+            if (view == null) return;
+            var viewer = view.GetCurrentSkillViewer();
+            if (viewer == null) return;
+            var targets = viewer.GetCurrentTargets();
+            if (targets == null) return;
+
+            for (int i = 0; i < targets.Count; i++)
+            {
+                var target = targets[i];
+                if (target != null && target.transform != null) into.Add(target.transform.position);
+            }
+        }
+        catch { }
+    }
+
+    [HideFromIl2Cpp]
     private void PositionVfx(VfxCue cue)
     {
         if (cue.ActiveInstance == null) return;

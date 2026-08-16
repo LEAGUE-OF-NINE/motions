@@ -17,3 +17,4 @@
   - [JSON](JsonReference.md)
   - [Buff VFX](BuffVfx.md)
   - [Character VFX](CharacterVFX.md)
+  - [Props](props.md)

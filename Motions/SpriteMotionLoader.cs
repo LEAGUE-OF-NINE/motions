@@ -54,7 +54,12 @@ public static class SpriteMotionLoader
         }
     }
 
-    private static SpriteMotion Build(string motionDir, string label)
+    /// <summary>
+    /// Builds one animation from a folder of PNGs. Public because props reuse it: a prop folder
+    /// and a motion folder have the same shape, and duplicating the decode path would mean two
+    /// places to fix the next time an art tool exports something unusual.
+    /// </summary>
+    public static SpriteMotion Build(string motionDir, string label)
     {
         string jsonPath = Path.Combine(motionDir, "animation.json");
         AnimationSpec spec;

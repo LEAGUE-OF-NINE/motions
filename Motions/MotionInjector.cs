@@ -104,8 +104,10 @@ public static class MotionInjector
             string appearanceID = forcedID ?? character.charInfo.appearanceID;
             TimelineAsset customTimeline = MotionData.FindTimelineForAppearance(appearanceID);
 
-            // A sprite motion has no TimelineAsset to find, so the bundle check alone would bail out.
-            if (customTimeline == null && !MotionData.HasSpriteMotion(appearanceID)) return;
+            // A sprite motion has no TimelineAsset to find, and a props-only character has neither,
+            // so the bundle check alone would bail out.
+            if (customTimeline == null && !MotionData.HasSpriteMotion(appearanceID)
+                && !MotionData.HasProps(appearanceID)) return;
 
             GameObject sandboxObj = new("Motions_Sandbox_Test");
             sandboxObj.transform.SetParent(character.transform);
@@ -128,6 +130,13 @@ public static class MotionInjector
             syncScript.SandboxRenderer = testRenderer;
             syncScript.OriginalRenderer = character.sprenderer_charactermotion;
             syncScript.Appearance = character;
+
+            if (MotionData.HasProps(appearanceID))
+            {
+                var rig = sandboxObj.AddComponent<PropRig>();
+                rig.Sync = syncScript;
+                rig.AppearanceID = appearanceID;
+            }
 
             MotionData.PatchedCharacters.Add(character);
             Logger.LogWarning($"Animation Sidecar attached to {appearanceID}");
@@ -182,7 +191,8 @@ public static class MotionInjector
         var sandboxTransform = appearance.transform.FindChild("Motions_Sandbox_Test");
 
         if (sandboxTransform == null &&
-            (MotionData.HasBundle(appearanceID) || MotionData.HasSpriteMotion(appearanceID)))
+            (MotionData.HasBundle(appearanceID) || MotionData.HasSpriteMotion(appearanceID)
+             || MotionData.HasProps(appearanceID)))
         {
             AttachSidecar(appearance, appearanceID);
             sandboxTransform = appearance.transform.FindChild("Motions_Sandbox_Test");
@@ -194,6 +204,9 @@ public static class MotionInjector
         RegisterTrailSource(appearance, syncScript);
 
         var key = MotionKey.Create(appearanceID, motiondetail, index);
+
+        syncScript.CurrentMotion = motiondetail;
+        syncScript.CurrentCoin = index;
 
         MotionData.TryGetSpriteMotion(appearanceID, motiondetail, index, out var spriteMotion);
 
@@ -226,6 +239,9 @@ public static class MotionInjector
             syncScript.Frames = null;
             syncScript.FrameTimes = null;
         }
+
+        // Props author their action times as fractions of this.
+        syncScript.MotionDuration = customTimeline != null ? customTimeline.duration : 0.0;
 
         // ---- Sound cues ----
         syncScript.SoundCues.Clear();
