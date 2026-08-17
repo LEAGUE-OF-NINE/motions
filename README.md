@@ -41,22 +41,64 @@ Then just launch the game to test.
 
 ## Code layout
 
+Everything starts from a Harmony patch. `Motions.cs` is the one to read first.
+
+**Core**
+
 | File | What it does |
 | ---- | ------------ |
 | `Plugin.cs` | BepInEx entry point; sets up config, logging, and Harmony patches |
-| `Motions/Motions.cs` | Harmony patches that orchestrate the motion system |
-| `Motions/BuffPatches.cs` | Harmony patches for buff VFX |
+| `Motions/Motions.cs` | Harmony patches that orchestrate the motion system; discovers and loads mod folders |
 | `Motions/MotionData.cs` | Central caches and asset-lookup helpers (no patches, no timeline logic) |
 | `Motions/MotionInjector.cs` | Sidecar attachment, motion injection, and custom motion playback |
-| `Motions/CueExtractor.cs` | Extracts sound/VFX cues from bundle timelines; timeline caching |
 | `Motions/SidecarSyncBehavior.cs` | Runtime behaviour on the sidecar: syncs with the master director, fires cues |
-| `Motions/TimelineBuilder.cs` | Builds Unity Timeline assets |
-| `Motions/SpriteMotionSpec.cs` | Pure parsing/maths for bundle-free sprite motions (no Unity types, unit-tested) |
+| `Motions/CueExtractor.cs` | Extracts sound/VFX cues from bundle timelines; timeline caching |
+| `Motions/TimelineBuilder.cs` | Builds Unity Timeline assets, one per coin, from a skill JSON |
+| `Motions/Types.cs` | Shared types, including the skill JSON schema |
+| `Motions/Fmod.cs` | FMOD audio helpers |
+| `Motions/Logger.cs` | Log helpers, gated on the plugin's configured log level |
+
+**Sprite motions** (bundle-free, PNG folders)
+
+| File | What it does |
+| ---- | ------------ |
+| `Motions/SpriteMotionSpec.cs` | Pure parsing/maths (no Unity types, unit-tested) |
 | `Motions/SpriteMotionLoader.cs` | Builds sprites and sound cues from a `motions/` folder |
+
+**Appearances**
+
+| File | What it does |
+| ---- | ------------ |
 | `Motions/AppearanceRegistry.cs` | Reads `appearance.json`; owns the `!motions_` ID prefix |
 | `Motions/AppearanceFactory.cs` | Builds a new `CharacterAppearance` by cloning a vanilla donor |
-| `Motions/Fmod.cs` | FMOD audio helpers |
-| `Motions/Types.cs` | Shared types |
+
+**Props** (spawnable objects declared in `CharacterVFX.json`)
+
+| File | What it does |
+| ---- | ------------ |
+| `Motions/Props/PropSpec.cs` | Placement, gating and timing maths (no Unity types, unit-tested) |
+| `Motions/Props/PropLoader.cs` | Reads the `props` array, loads each prop's art up front, builds instances |
+| `Motions/Props/PropRig.cs` | Per-character rig: owns unit-anchored props and drives them off the motion clock |
+| `Motions/Props/PropAnchors.cs` | Anchor names (`self`, `enemy`, `center`, `enemies`) to world points |
+| `Motions/Props/PropStrike.cs` | `do: "strike"` — one in-flight strike: its progress, position and facing |
+| `Motions/Props/PropPlant.cs` | `do: "plant"` — spawn one world instance at its time and forget it |
+| `Motions/Props/PropWorld.cs` | Ticks planted props, which outlive both the motion and the caster |
+| `Motions/Props/PropTargetRings.cs` | Target-anchored props: a ring per enemy, following their buffs |
+
+A new prop action kind is two pieces: a `PropActionKind` subclass in `Props/PropSpec.cs`
+declaring its `do` name, its shape and its field rules (that half is unit-tested, which is
+why it lives there), and a file next to `PropStrike.cs` doing the work. `PropRig` dispatches
+on the shape flags, so it does not grow a branch per kind.
+
+**Other patches**
+
+| File | What it does |
+| ---- | ------------ |
+| `Motions/Patches/BuffPatches.cs` | Harmony patches for buff VFX |
+| `Motions/Patches/CharVFXParse.cs` | Reads `CharacterVFX.json` and applies keyword-gated VFX |
+| `Motions/Patches/ScreenBorderPatches.cs` | Custom screen-border effects (`CUSTOMSCREEN` bundles) |
+| `Motions/Patches/DashboardInstantiation.cs` | ModularSkillScripts consequence that spawns dashboard VFX |
+| `Motions/Patches/CustomBattleSkillView_er.cs` | Swaps in custom skill icons in the battle UI |
 
 ## Contributing
 

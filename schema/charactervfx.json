@@ -169,7 +169,7 @@
         "do": {
           "enum": ["strike", "plant"],
           "default": "strike",
-          "description": "Anything other than \"plant\" is treated as a strike."
+          "description": "What this action does. Any other value is rejected at load."
         },
         "motion": {
           "type": "string",

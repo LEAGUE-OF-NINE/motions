@@ -123,6 +123,106 @@ public class PropEntry
 }
 
 /// <summary>
+/// One value an author may write in an action's <c>do</c>. Adding a kind means adding a subclass
+/// here and a branch for its shape in PropRig's per-frame loop - not editing three exclusion tests
+/// that each assumed "anything that is not a plant is a strike".
+/// <para>
+/// This half of a kind lives in PropSpec.cs on purpose: it is the half Motions.Tests can reach, so
+/// a kind's field rules are pinned by the suite. The half that needs UnityEngine - actually moving
+/// or spawning something - lives in the kind's own file next door.
+/// </para>
+/// <para>
+/// ponytail: shape flags, not a virtual Tick. A real per-kind runtime hook would have to take
+/// world positions, and this file may not name Vector3 (Motions.Tests.csproj links it precisely to
+/// enforce that). Cross that boundary only when a third kind actually needs it.
+/// </para></summary>
+public abstract class PropActionKind
+{
+    /// <summary>The <c>do</c> value, lowercase. Matched case-insensitively.</summary>
+    public abstract string Name { get; }
+
+    /// <summary>Moves ring slots for as long as its window is open. PropRig resolves these once per
+    /// entry per frame and then applies them to each slot the action owns.</summary>
+    public virtual bool MovesSlots => false;
+
+    /// <summary>Fires once, on the frame its time is crossed, and never touches a ring slot.</summary>
+    public virtual bool OneShot => false;
+
+    /// <summary>Whatever this kind wants to say about an action written for it. Null means usable.
+    /// Runs after the checks every kind shares, so it can assume motion and slot are already sane.
+    /// </summary>
+    public virtual string Validate(PropEntry entry, PropAction action, bool worldAnchored) => null;
+
+    /// <summary>Every kind an author may write. A <c>do</c> that is not in here is rejected at load
+    /// rather than quietly behaving like a strike, which is what an unknown value used to do.</summary>
+    public static readonly PropActionKind[] All = { new StrikeKind(), new PlantKind() };
+
+    /// <summary>The kind an action asks for, or null if it named one that does not exist. An empty
+    /// <c>do</c> is "strike", matching PropAction's own default.</summary>
+    public static PropActionKind Find(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return All[0];
+
+        foreach (var kind in All)
+            if (PropSpec.Is(name, kind.Name)) return kind;
+
+        return null;
+    }
+
+    /// <summary>The legal names, for the error message a typo'd <c>do</c> earns.</summary>
+    public static string Names()
+    {
+        var names = new string[All.Length];
+        for (int i = 0; i < All.Length; i++) names[i] = $"\"{All[i].Name}\"";
+
+        return string.Join(", ", names);
+    }
+}
+
+/// <summary>Leaves the ring, travels to a target, and returns, is consumed, or parks. The runtime
+/// half is <see cref="ActiveStrike"/> in PropStrike.cs.</summary>
+public sealed class StrikeKind : PropActionKind
+{
+    public override string Name => "strike";
+    public override bool MovesSlots => true;
+
+    public override string Validate(PropEntry entry, PropAction action, bool worldAnchored)
+    {
+        // A strike moves an instance out of a ring slot and puts it back. A world-anchored entry
+        // has no ring, so there is no useful reading of this.
+        if (worldAnchored)
+            return $"action on motion '{action.motion}' is a strike, but the entry is world-anchored";
+
+        if (string.IsNullOrEmpty(action.park)) return null;
+
+        if (!PropSpec.Is(action.park, "ring") && !PropSpec.Is(action.park, "hold")
+            && !PropSpec.Is(action.park, "stack"))
+            return $"unknown park mode '{action.park}' - use \"ring\", \"hold\" or \"stack\"";
+
+        // Two endings for one strike. Picking either one silently would be a guess about which the
+        // author meant, and the wrong guess is invisible in game.
+        if (action.returnAt >= 0)
+            return $"action on motion '{action.motion}' sets both 'park' and 'returnAt', "
+                   + "which are two different endings - drop one";
+
+        return null;
+    }
+}
+
+/// <summary>Spawns one world instance at its time and forgets it. The runtime half is
+/// <see cref="PropPlant"/> in PropPlant.cs.</summary>
+public sealed class PlantKind : PropActionKind
+{
+    public override string Name => "plant";
+    public override bool OneShot => true;
+
+    public override string Validate(PropEntry entry, PropAction action, bool worldAnchored)
+        => string.IsNullOrEmpty(action.park)
+            ? null
+            : $"action on motion '{action.motion}' is a plant, and only a strike can park";
+}
+
+/// <summary>
 /// Placement, gating and timing maths for props. Deliberately free of UnityEngine and interop
 /// types so Motions.Tests can exercise it without a running game - see Motions.Tests.csproj.
 /// </summary>
@@ -131,6 +231,13 @@ public static class PropSpec
     /// <summary>Instances per entry, whatever the JSON asks for. A typo'd threshold must not
     /// spawn hundreds of objects into a battle.</summary>
     public const int HardCountCeiling = 16;
+
+    /// <summary>Compares one of the format's keyword fields - anchor, park mode, ease name - against
+    /// a literal. Every such field in this file and PropRig goes through here: case-insensitive
+    /// because authors write JSON by hand, and ordinal rather than ToLowerInvariant because some of
+    /// these run per struck slot per frame, where allocating a lowercased copy would not.</summary>
+    public static bool Is(string value, string literal)
+        => string.Equals(value, literal, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>How many instances should exist right now.</summary>
     public static int TargetCount(PropEntry entry, bool gatePasses, int stack)
@@ -221,11 +328,11 @@ public static class PropSpec
         p = Math.Clamp(p, 0.0, 1.0);
         if (string.IsNullOrEmpty(name)) return p;
 
-        if (string.Equals(name, "inquad", StringComparison.OrdinalIgnoreCase))
+        if (Is(name, "inquad"))
             return p * p;
-        if (string.Equals(name, "outquad", StringComparison.OrdinalIgnoreCase))
+        if (Is(name, "outquad"))
             return 1.0 - (1.0 - p) * (1.0 - p);
-        if (string.Equals(name, "inoutquad", StringComparison.OrdinalIgnoreCase))
+        if (Is(name, "inoutquad"))
             return p < 0.5 ? 2.0 * p * p : 1.0 - 2.0 * (1.0 - p) * (1.0 - p);
 
         return p;
@@ -284,10 +391,10 @@ public static class PropSpec
         if (string.IsNullOrEmpty(entry.folder) && string.IsNullOrEmpty(entry.prefab))
             return "neither 'folder' nor 'prefab' is set";
 
-        bool isWorld = string.Equals(entry.anchor, "world", StringComparison.OrdinalIgnoreCase);
-        bool isTarget = string.Equals(entry.anchor, "target", StringComparison.OrdinalIgnoreCase);
+        bool isWorld = Is(entry.anchor, "world");
+        bool isTarget = Is(entry.anchor, "target");
         bool isUnit = string.IsNullOrEmpty(entry.anchor)
-                      || string.Equals(entry.anchor, "unit", StringComparison.OrdinalIgnoreCase);
+                      || Is(entry.anchor, "unit");
 
         if (!isWorld && !isUnit && !isTarget)
             return $"unknown anchor '{entry.anchor}' - use \"unit\", \"world\" or \"target\"";
@@ -300,8 +407,7 @@ public static class PropSpec
                    + "not the motion clock";
 
         if (!string.IsNullOrEmpty(entry.parkUntil)
-            && !string.Equals(entry.parkUntil, "battle", StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(entry.parkUntil, "round", StringComparison.OrdinalIgnoreCase))
+            && !Is(entry.parkUntil, "battle") && !Is(entry.parkUntil, "round"))
             return $"unknown parkUntil '{entry.parkUntil}' - use \"battle\" or \"round\"";
 
         if (entry.actions != null)
@@ -315,35 +421,21 @@ public static class PropSpec
                 // resolves its target but moves no instance. Caught here for the same reason
                 // park+returnAt is - in game it is invisible, and looks like three other failures.
                 if (!string.IsNullOrEmpty(action.slot)
-                    && !string.Equals(action.slot, "all", StringComparison.OrdinalIgnoreCase)
-                    && !string.Equals(action.slot, "next", StringComparison.OrdinalIgnoreCase)
+                    && !Is(action.slot, "all") && !Is(action.slot, "next")
                     && !int.TryParse(action.slot, out _))
                     return $"action on motion '{action.motion}' has slot '{action.slot}' - "
                            + "use \"all\", \"next\", or a 0-based index";
 
-                bool isStrike = !string.Equals(action.@do, "plant", StringComparison.OrdinalIgnoreCase);
+                // Unknown 'do' is refused rather than treated as a strike. Every check downstream
+                // used to ask "is this a plant?" and take the else branch for everything, so a
+                // typo'd kind loaded clean and then behaved as a strike nobody had authored.
+                var kind = PropActionKind.Find(action.@do);
+                if (kind == null)
+                    return $"action on motion '{action.motion}' has do '{action.@do}' - "
+                           + $"use {PropActionKind.Names()}";
 
-                if (!string.IsNullOrEmpty(action.park))
-                {
-                    if (!isStrike)
-                        return $"action on motion '{action.motion}' is a plant, and only a strike can park";
-
-                    if (!string.Equals(action.park, "ring", StringComparison.OrdinalIgnoreCase)
-                        && !string.Equals(action.park, "hold", StringComparison.OrdinalIgnoreCase)
-                        && !string.Equals(action.park, "stack", StringComparison.OrdinalIgnoreCase))
-                        return $"unknown park mode '{action.park}' - use \"ring\", \"hold\" or \"stack\"";
-
-                    // Two endings for one strike. Picking either one silently would be a guess
-                    // about which the author meant, and the wrong guess is invisible in game.
-                    if (action.returnAt >= 0)
-                        return $"action on motion '{action.motion}' sets both 'park' and 'returnAt', "
-                               + "which are two different endings - drop one";
-                }
-
-                // A strike moves an instance out of a ring slot and puts it back. A world-anchored
-                // entry has no ring, so there is no useful reading of this.
-                if (isStrike && isWorld)
-                    return $"action on motion '{action.motion}' is a strike, but the entry is world-anchored";
+                string complaint = kind.Validate(entry, action, isWorld);
+                if (complaint != null) return complaint;
             }
         }
 

@@ -153,106 +153,127 @@ public class SidecarSyncBehavior : MonoBehaviour
 
     void Update()
     {
-        if (IsModdedSkillActive && OriginalRenderer != null && SandboxRenderer != null)
-        {
-            // share the original's material and every material effect follows.
-            SandboxRenderer.sharedMaterial = OriginalRenderer.sharedMaterial;
+        MirrorOriginalMaterial();
+        SyncToMaster();
 
-            var color = SandboxRenderer.color;
-            color.a = OriginalRenderer.color.a;
-            SandboxRenderer.color = color;
-        }
+        // Everything below reads the slave director's clock, and none of it means anything while
+        // the game's own motion is playing.
+        if (!IsModdedSkillActive || SlaveDirector == null) return;
 
-        if (MasterDirector != null && SlaveDirector != null)
+        double t = SlaveDirector.time;
+
+        StepSpriteFrame(t);
+        TickSoundCues((float)t);
+        TickVfxCues((float)t);
+    }
+
+    /// <summary>Shares the original renderer's material and alpha, so every material effect the
+    /// game applies to the character - fades, tints, damage flashes - follows onto the sidecar.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private void MirrorOriginalMaterial()
+    {
+        if (!IsModdedSkillActive || OriginalRenderer == null || SandboxRenderer == null) return;
+
+        SandboxRenderer.sharedMaterial = OriginalRenderer.sharedMaterial;
+
+        var color = SandboxRenderer.color;
+        color.a = OriginalRenderer.color.a;
+        SandboxRenderer.color = color;
+    }
+
+    /// <summary>Drives the slave director off the master's clock rather than letting it run free.
+    /// Only for motions that asked for it (ShouldSync) - skills and parries, whose hit timings have
+    /// to stay locked to the game's own animation.</summary>
+    [HideFromIl2Cpp]
+    private void SyncToMaster()
+    {
+        if (MasterDirector == null || SlaveDirector == null) return;
+        if (MasterDirector.state != PlayState.Playing || !IsModdedSkillActive || !ShouldSync) return;
+
+        SlaveDirector.time = MasterDirector.time;
+        SlaveDirector.Evaluate();
+    }
+
+    /// <summary>Puts the right sprite on screen for a bundle-free motion.</summary>
+    [HideFromIl2Cpp]
+    private void StepSpriteFrame(double t)
+    {
+        if (Frames == null || Frames.Length == 0) return;
+
+        // Looping motions wrap back to 0; the cursor only walks forward otherwise, so this is
+        // O(1) amortised rather than a search. SpriteMotionSpec.FrameIndexAt encodes the same
+        // rule declaratively and is what the tests pin.
+        if (_frameCursor >= Frames.Length || t < FrameTimes[_frameCursor])
+            _frameCursor = 0;
+
+        while (_frameCursor + 1 < Frames.Length && FrameTimes[_frameCursor + 1] <= t)
+            _frameCursor++;
+
+        SandboxRenderer.sprite = Frames[_frameCursor];
+    }
+
+    /// <summary>Fires each sound cue as its time is reached, and stops the ones that have run their
+    /// authored duration. Cues are structs, so each edit is written back into the list.</summary>
+    [HideFromIl2Cpp]
+    private void TickSoundCues(float currentTime)
+    {
+        for (int i = 0; i < SoundCues.Count; i++)
         {
-            if (MasterDirector.state == PlayState.Playing && IsModdedSkillActive && ShouldSync)
+            var cue = SoundCues[i];
+
+            if (!cue.Triggered && currentTime >= cue.StartTime)
             {
-                SlaveDirector.time = MasterDirector.time;
-                SlaveDirector.Evaluate();
+                cue.Triggered = true;
+                float sfxVol = SoundManager.Instance != null ? SoundManager.Instance.Volume_SFX : 1f;
+                cue.ActiveChannel = FMODAudioUtil.PlaySound(cue.WavData, cue.ClipIn, sfxVol);
+                SoundCues[i] = cue;
+                Logger.LogInfo($"[SidecarSync] Fired FMOD sound cue at t={currentTime:F3}s (clipIn={cue.ClipIn:F3}s, dur={cue.Duration:F3}s)");
+            }
+
+            // Duration 0 means "play the whole clip", so only a cue that named one is cut short.
+            if (cue.Triggered && cue.Duration > 0f && cue.ActiveChannel.hasHandle()
+                && currentTime >= cue.StartTime + cue.Duration)
+            {
+                cue.ActiveChannel.stop();
+                cue.ActiveChannel = default;
+                SoundCues[i] = cue;
             }
         }
+    }
 
-        // ---- Sprite frames (bundle-free motions) ----
-        if (IsModdedSkillActive && Frames != null && Frames.Length > 0 && SlaveDirector != null)
+    /// <summary>Switches on each VFX cue as its time is reached and destroys it at the end of its
+    /// duration. The instance is usually pre-built and inactive; a cue that has none builds one.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private void TickVfxCues(float currentTime)
+    {
+        for (int i = 0; i < VfxCues.Count; i++)
         {
-            double t = SlaveDirector.time;
+            var cue = VfxCues[i];
 
-            // Looping motions wrap back to 0; the cursor only walks forward otherwise, so this is
-            // O(1) amortised rather than a search. SpriteMotionSpec.FrameIndexAt encodes the same
-            // rule declaratively and is what the tests pin.
-            if (_frameCursor >= Frames.Length || t < FrameTimes[_frameCursor])
-                _frameCursor = 0;
-
-            while (_frameCursor + 1 < Frames.Length && FrameTimes[_frameCursor + 1] <= t)
-                _frameCursor++;
-
-            SandboxRenderer.sprite = Frames[_frameCursor];
-        }
-
-        // ---- Sound cues ----
-        if (IsModdedSkillActive && SlaveDirector != null && SoundCues.Count > 0)
-        {
-            float currentTime = (float)SlaveDirector.time;
-            for (int i = 0; i < SoundCues.Count; i++)
+            if (!cue.Triggered && currentTime >= cue.StartTime)
             {
-                var cue = SoundCues[i];
-
-                if (!cue.Triggered && currentTime >= cue.StartTime)
+                cue.Triggered = true;
+                if (cue.ActiveInstance != null)
                 {
-                    cue.Triggered = true;
-                    float sfxVol = SoundManager.Instance != null ? SoundManager.Instance.Volume_SFX : 1f;
-                    cue.ActiveChannel = FMODAudioUtil.PlaySound(cue.WavData, cue.ClipIn, sfxVol);
-                    SoundCues[i] = cue;
-                    Logger.LogInfo($"[SidecarSync] Fired FMOD sound cue at t={currentTime:F3}s (clipIn={cue.ClipIn:F3}s, dur={cue.Duration:F3}s)");
+                    PositionVfx(cue);
+                    cue.ActiveInstance.SetActive(true);
                 }
-
-                if (cue.Triggered && cue.Duration > 0f && cue.ActiveChannel.hasHandle())
+                else if (cue.Prefab != null)
                 {
-                    float endTime = cue.StartTime + cue.Duration;
-                    if (currentTime >= endTime)
-                    {
-                        cue.ActiveChannel.stop();
-                        cue.ActiveChannel = default;
-                        SoundCues[i] = cue;
-                    }
+                    cue.ActiveInstance = UnityEngine.Object.Instantiate(cue.Prefab, SandboxRenderer.transform);
+                    PositionVfx(cue);
                 }
+                VfxCues[i] = cue;
             }
-        }
 
-        // ---- VFX cues ----
-        if (IsModdedSkillActive && SlaveDirector != null && VfxCues.Count > 0)
-        {
-            float currentTime = (float)SlaveDirector.time;
-            for (int i = 0; i < VfxCues.Count; i++)
+            if (cue.Triggered && cue.ActiveInstance != null && cue.Duration > 0f
+                && currentTime >= cue.StartTime + cue.Duration)
             {
-                var cue = VfxCues[i];
-
-                if (!cue.Triggered && currentTime >= cue.StartTime)
-                {
-                    cue.Triggered = true;
-                    if (cue.ActiveInstance != null)
-                    {
-                        PositionVfx(cue);
-                        cue.ActiveInstance.SetActive(true);
-                    }
-                    else if (cue.Prefab != null)
-                    {
-                        cue.ActiveInstance = UnityEngine.Object.Instantiate(cue.Prefab, SandboxRenderer.transform);
-                        PositionVfx(cue);
-                    }
-                    VfxCues[i] = cue;
-                }
-
-                if (cue.Triggered && cue.ActiveInstance != null && cue.Duration > 0f)
-                {
-                    float endTime = cue.StartTime + cue.Duration;
-                    if (currentTime >= endTime)
-                    {
-                        UnityEngine.Object.Destroy(cue.ActiveInstance);
-                        cue.ActiveInstance = null;
-                        VfxCues[i] = cue;
-                    }
-                }
+                UnityEngine.Object.Destroy(cue.ActiveInstance);
+                cue.ActiveInstance = null;
+                VfxCues[i] = cue;
             }
         }
     }

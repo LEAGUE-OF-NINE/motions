@@ -243,112 +243,129 @@ public static class MotionInjector
         // Props author their action times as fractions of this.
         syncScript.MotionDuration = customTimeline != null ? customTimeline.duration : 0.0;
 
-        // ---- Sound cues ----
+        LoadSoundCues(syncScript, spriteMotion, key);
+        LoadVfxCues(syncScript, key);
+        StartTimeline(syncScript, customTimeline, motiondetail);
+    }
+
+    /// <summary>Refills the sidecar's sound cues for the motion about to play, from the sprite
+    /// motion's own list or the bundle timeline's extracted one.</summary>
+    private static void LoadSoundCues(SidecarSyncBehavior syncScript, SpriteMotion spriteMotion,
+                                      MotionKey key)
+    {
         syncScript.SoundCues.Clear();
 
         var cueSource = spriteMotion != null
             ? spriteMotion.Sounds
             : (MotionData.SoundCueCache.TryGetValue(key, out var cached) ? cached : null);
 
-        if (cueSource != null)
+        if (cueSource == null) return;
+
+        if (syncScript.SoundCues.Capacity < cueSource.Count)
+            syncScript.SoundCues.Capacity = cueSource.Count;
+
+        // Copied, not shared: SoundCue is a struct carrying Triggered and ActiveChannel, and
+        // the cached list is reused on every play of the motion.
+        for (int i = 0; i < cueSource.Count; i++)
         {
-            if (syncScript.SoundCues.Capacity < cueSource.Count)
-                syncScript.SoundCues.Capacity = cueSource.Count;
-
-            // Copied, not shared: SoundCue is a struct carrying Triggered and ActiveChannel, and
-            // the cached list is reused on every play of the motion.
-            for (int i = 0; i < cueSource.Count; i++)
+            var c = cueSource[i];
+            syncScript.SoundCues.Add(new SoundCue
             {
-                var c = cueSource[i];
-                syncScript.SoundCues.Add(new SoundCue
-                {
-                    StartTime = c.StartTime,
-                    ClipIn = c.ClipIn,
-                    Duration = c.Duration,
-                    WavData = c.WavData,
-                    Triggered = false
-                });
-            }
+                StartTime = c.StartTime,
+                ClipIn = c.ClipIn,
+                Duration = c.Duration,
+                WavData = c.WavData,
+                Triggered = false
+            });
         }
+    }
 
-        // ---- VFX cues (only replace if custom VFX actually exist) ----
-        if (MotionData.VfxCueCache.TryGetValue(key, out var vfxCues) && vfxCues.Count > 0)
+    /// <summary>Refills the sidecar's VFX cues, pre-instantiating each prefab inactive so the cue
+    /// only has to switch it on. Left alone when this motion has no custom VFX of its own - the
+    /// previous motion's cues are cheaper to keep than to rebuild.</summary>
+    private static void LoadVfxCues(SidecarSyncBehavior syncScript, MotionKey key)
+    {
+        if (!MotionData.VfxCueCache.TryGetValue(key, out var vfxCues) || vfxCues.Count == 0) return;
+
+        for (int i = 0; i < syncScript.VfxCues.Count; i++)
         {
-            for (int i = 0; i < syncScript.VfxCues.Count; i++)
-            {
-                var old = syncScript.VfxCues[i];
-                if (old.ActiveInstance != null)
-                    UnityEngine.Object.Destroy(old.ActiveInstance);
-            }
-            syncScript.VfxCues.Clear();
-
-            if (syncScript.VfxCues.Capacity < vfxCues.Count)
-                syncScript.VfxCues.Capacity = vfxCues.Count;
-
-            for (int i = 0; i < vfxCues.Count; i++)
-            {
-                var c = vfxCues[i];
-
-                GameObject preloaded = null;
-                if (c.Prefab != null)
-                {
-                    preloaded = UnityEngine.Object.Instantiate(c.Prefab, syncScript.SandboxRenderer.transform);
-                    preloaded.SetActive(false);
-                }
-
-                syncScript.VfxCues.Add(new VfxCue
-                {
-                    StartTime = c.StartTime,
-                    Duration = c.Duration,
-                    Prefab = c.Prefab,
-                    Triggered = false,
-                    ActiveInstance = preloaded,
-                    SpawnTarget = c.SpawnTarget,
-                    OffsetX = c.OffsetX,
-                    OffsetY = c.OffsetY,
-                    OffsetZ = c.OffsetZ
-                });
-            }
+            var old = syncScript.VfxCues[i];
+            if (old.ActiveInstance != null)
+                UnityEngine.Object.Destroy(old.ActiveInstance);
         }
+        syncScript.VfxCues.Clear();
 
-        // ---- Play timeline on sidecar ----
-        if (customTimeline != null)
+        if (syncScript.VfxCues.Capacity < vfxCues.Count)
+            syncScript.VfxCues.Capacity = vfxCues.Count;
+
+        for (int i = 0; i < vfxCues.Count; i++)
         {
-            syncScript.IsModdedSkillActive = true;
-            syncScript.SandboxRenderer.enabled = true;
+            var c = vfxCues[i];
 
-            syncScript.SlaveDirector.playableAsset = customTimeline;
-
-            string motionName = motiondetail.ToString();
-            bool isSpecial = motionName.StartsWith("S") || motionName.ToLower().Contains("parrying");
-            syncScript.ShouldSync = isSpecial;
-
-            syncScript.SlaveDirector.time = 0;
-            if (motiondetail == MOTION_DETAIL.Idle)
-                syncScript.SlaveDirector.extrapolationMode = DirectorWrapMode.Loop;
-            else
-                syncScript.SlaveDirector.extrapolationMode = DirectorWrapMode.None;
-
-            if (!isSpecial)
-                syncScript.SlaveDirector.Play();
-
-            foreach (var track in customTimeline.flattenedTracks)
+            GameObject preloaded = null;
+            if (c.Prefab != null)
             {
-                var animTrack = track.TryCast<AnimationTrack>();
-                if (animTrack != null)
-                    syncScript.SlaveDirector.SetGenericBinding(track, syncScript.SlaveAnimator);
+                preloaded = UnityEngine.Object.Instantiate(c.Prefab, syncScript.SandboxRenderer.transform);
+                preloaded.SetActive(false);
             }
 
-            if (syncScript.OriginalRenderer != null)
-                syncScript.OriginalRenderer.enabled = false;
+            syncScript.VfxCues.Add(new VfxCue
+            {
+                StartTime = c.StartTime,
+                Duration = c.Duration,
+                Prefab = c.Prefab,
+                Triggered = false,
+                ActiveInstance = preloaded,
+                SpawnTarget = c.SpawnTarget,
+                OffsetX = c.OffsetX,
+                OffsetY = c.OffsetY,
+                OffsetZ = c.OffsetZ
+            });
         }
-        else
+    }
+
+    /// <summary>Hands the timeline to the slave director and swaps the sidecar in for the original
+    /// renderer. A null timeline is the "nothing custom here" case: the sidecar steps aside and the
+    /// game's own renderer comes back on.</summary>
+    private static void StartTimeline(SidecarSyncBehavior syncScript, TimelineAsset customTimeline,
+                                      MOTION_DETAIL motiondetail)
+    {
+        if (customTimeline == null)
         {
             syncScript.IsModdedSkillActive = false;
             syncScript.SandboxRenderer.enabled = false;
 
             if (syncScript.OriginalRenderer != null)
                 syncScript.OriginalRenderer.enabled = true;
+            return;
         }
+
+        syncScript.IsModdedSkillActive = true;
+        syncScript.SandboxRenderer.enabled = true;
+        syncScript.SlaveDirector.playableAsset = customTimeline;
+
+        // Skills and parries are driven frame-by-frame off the master director instead of played
+        // free-running, so their hit timings stay locked to the game's own animation.
+        string motionName = motiondetail.ToString();
+        bool isSpecial = motionName.StartsWith("S") || motionName.ToLower().Contains("parrying");
+        syncScript.ShouldSync = isSpecial;
+
+        syncScript.SlaveDirector.time = 0;
+        syncScript.SlaveDirector.extrapolationMode = motiondetail == MOTION_DETAIL.Idle
+            ? DirectorWrapMode.Loop
+            : DirectorWrapMode.None;
+
+        if (!isSpecial)
+            syncScript.SlaveDirector.Play();
+
+        foreach (var track in customTimeline.flattenedTracks)
+        {
+            var animTrack = track.TryCast<AnimationTrack>();
+            if (animTrack != null)
+                syncScript.SlaveDirector.SetGenericBinding(track, syncScript.SlaveAnimator);
+        }
+
+        if (syncScript.OriginalRenderer != null)
+            syncScript.OriginalRenderer.enabled = false;
     }
 }

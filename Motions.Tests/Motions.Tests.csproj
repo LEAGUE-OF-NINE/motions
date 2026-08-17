@@ -12,6 +12,6 @@
     <!-- Links plugin source files that must never reference UnityEngine or interop
          types; if one starts to, this project stops compiling, which is the point. -->
     <Compile Include="..\Motions\SpriteMotionSpec.cs" Link="SpriteMotionSpec.cs" />
-    <Compile Include="..\Motions\PropSpec.cs" Link="PropSpec.cs" />
+    <Compile Include="..\Motions\Props\PropSpec.cs" Link="PropSpec.cs" />
   </ItemGroup>
 </Project>

@@ -52,138 +52,155 @@ public class Motions
     [HarmonyPrefix]
     public static void LoadScene(SCENE_STATE state, DelegateEvent onLoadScene)
     {
-        switch (state)
+        if (state != SCENE_STATE.Battle)
         {
-            case SCENE_STATE.Battle:
+            MotionData.UnloadAll();
+            return;
+        }
+
+        foreach (var modPath in Directory.GetDirectories(Plugin.modsPath.FullPath))
+        {
+            string modName = Path.GetFileName(modPath);
+            if (modName.StartsWith("DISABLED_") || modName.StartsWith("FULLDISABLED_"))
             {
-                foreach (var modPath in Directory.GetDirectories(Plugin.modsPath.FullPath))
-                {
-                    string modName = Path.GetFileName(modPath);
-                    if (modName.StartsWith("DISABLED_") || modName.StartsWith("FULLDISABLED_"))
-                    {
-                        Logger.LogInfo($"Skipping {modPath} due to it being disabled.");
-                        continue;
-                    }
-
-                    // Brand-new appearances, rather than overrides of existing ones. Registered
-                    // BEFORE the custom_motions guard below: a mod may define only
-                    // motion_appearances/ and the early 'continue' would otherwise skip it, which
-                    // surfaces much later and far away as "No registered base".
-                    var appearancesRoot = Path.Combine(modPath, "motion_appearances");
-                    if (Directory.Exists(appearancesRoot))
-                    {
-                        foreach (var appDir in Directory.GetDirectories(appearancesRoot))
-                        {
-                            string folderName = Path.GetFileName(appDir);
-
-                            // Lethe truncates any ID containing "Appearance" (Lethe/Patches/Skin.cs),
-                            // so such a name would silently resolve to the wrong appearance later.
-                            if (folderName.Contains("Appearance"))
-                            {
-                                Logger.LogError($"[Appearance] Folder '{folderName}' cannot contain " +
-                                                "\"Appearance\" in its name. Rename it.");
-                                continue;
-                            }
-
-                            // ReadBase never returns null - a folder of PNGs and nothing else is a
-                            // valid mod, and it falls back to a default donor rather than failing.
-                            string donor = AppearanceRegistry.ReadBase(appDir);
-                            string customID = AppearanceRegistry.Prefix + folderName;
-                            MotionData.CustomAppearanceBases[customID] = donor;
-                            RegisterCharacterFolder(appDir, customID);
-
-                            Logger.LogWarning($"[Appearance] Registered '{customID}' cloning '{donor}'.");
-                        }
-                    }
-
-                    var motionsRoot = Path.Combine(modPath, "custom_motions");
-                    if (!Directory.Exists(motionsRoot)) continue;
-                    // directory custom_motions:
-                    foreach (var charDir in Directory.GetDirectories(motionsRoot))
-                    {
-                            if (charDir.Contains("DASHBOARD"))
-                            {
-                                foreach (var bundlePath in Directory.GetFiles(charDir, "*.bundle", SearchOption.AllDirectories))
-                                {
-                                    var bundle = LoadBundle(bundlePath);
-                                    if (bundle == null)
-                                        continue;
-
-                                    string assetName = bundle.GetName();
-                                    // Dropping a same-named bundle without unloading it leaks it past
-                                    // UnloadAll, and the next battle rejects the file as already loaded.
-                                    if (MotionData.dashboardAssets.ContainsKey(assetName))
-                                    {
-                                        Logger.LogError($"Two dashboard bundles are named '{assetName}'. " +
-                                                        $"Ignoring {bundlePath} - rename one and rebuild.");
-                                        bundle.Unload(false);
-                                        continue;
-                                    }
-
-                                    MotionData.dashboardAssets.Add(assetName, bundle);
-                                    Logger.LogWarning($"Loaded bundle {bundle.name} for dashboard");
-                                }
-                                continue;
-                            }
-                            if (charDir.Contains("CUSTOMSCREEN"))
-                            {
-                                foreach (var bundlePath in Directory.GetFiles(charDir, "*.bundle", SearchOption.AllDirectories))
-                                {
-                                    var bundle = LoadBundle(bundlePath);
-                                    if (bundle == null)
-                                        continue;
-
-                                    string assetName = bundle.GetName().GetBefore(".bundle");
-                                    if (MotionData.screenBorderAssets.ContainsKey(assetName))
-                                    {
-                                        Logger.LogError($"Two screen bundles are named '{assetName}'. " +
-                                                        $"Ignoring {bundlePath} - rename one and rebuild.");
-                                        bundle.Unload(false);
-                                        continue;
-                                    }
-
-                                    MotionData.screenBorderAssets.Add(assetName, bundle);
-                                    Logger.LogWarning($"Loaded bundle {bundle.name} for screeneffect");
-                                }
-                                continue;
-                            }
-                            if (charDir.Contains("MOTIONBUFF_"))
-                            {
-                                string buffId = Path.GetFileName(charDir).Remove(0, 11);
-                                Logger.LogWarning($"Discovered directory for Buff: [{buffId}] at path: {charDir}");
-
-                                BUFF_UNIQUE_KEYWORD keyword = CustomBuffs.ParseBuffUniqueKeyword(buffId);
-
-                                Logger.LogInfo($"Resolved '{buffId}' -> {(int)keyword}");
-
-                                foreach (var bundlePath in Directory.GetFiles(charDir, "*.bundle", SearchOption.AllDirectories))
-                                {
-                                    Logger.LogInfo($"Loading bundle for {buffId}: {bundlePath}");
-
-                                    var bundle = LoadBundle(bundlePath);
-                                    if (bundle == null)
-                                        continue;
-
-                                    if (!MotionData.LoadedBuffAssets.ContainsKey(keyword))
-                                        MotionData.LoadedBuffAssets.Add(keyword, new System.Collections.Generic.List<AssetBundle>());
-
-                                    MotionData.LoadedBuffAssets[keyword].Add(bundle);
-
-                                    Logger.LogWarning($"Loaded motion bundle {bundle.name} for keyword {(int)keyword} ({buffId})");
-                                }
-                                continue;
-                            }
-                        string appearanceID = Path.GetFileName(charDir);
-                        RegisterCharacterFolder(charDir, appearanceID);
-                    }
-                }
-                break;
+                Logger.LogInfo($"Skipping {modPath} due to it being disabled.");
+                continue;
             }
-            case not SCENE_STATE.Battle:
+
+            LoadMod(modPath);
+        }
+    }
+
+    /// <summary>Everything one enabled mod folder contributes: its brand-new appearances, then its
+    /// overrides of existing ones.</summary>
+    static void LoadMod(string modPath)
+    {
+        // Registered BEFORE custom_motions: a mod may define only motion_appearances/, and
+        // returning early on a missing custom_motions/ would skip it - which surfaces much later
+        // and far away as "No registered base".
+        RegisterNewAppearances(Path.Combine(modPath, "motion_appearances"));
+
+        var motionsRoot = Path.Combine(modPath, "custom_motions");
+        if (!Directory.Exists(motionsRoot)) return;
+
+        foreach (var charDir in Directory.GetDirectories(motionsRoot))
+        {
+            // The three reserved names hold bundles for the dashboard, the screen border and buff
+            // effects rather than a character. The editor mirrors this list as RESERVED in fs.ts.
+            if (LoadReservedFolder(charDir)) continue;
+
+            RegisterCharacterFolder(charDir, Path.GetFileName(charDir));
+        }
+    }
+
+    /// <summary>Brand-new appearances, rather than overrides of existing ones: each folder under
+    /// motion_appearances/ registers as <c>!motions_&lt;folder&gt;</c>, cloning the donor its
+    /// appearance.json names.</summary>
+    static void RegisterNewAppearances(string appearancesRoot)
+    {
+        if (!Directory.Exists(appearancesRoot)) return;
+
+        foreach (var appDir in Directory.GetDirectories(appearancesRoot))
+        {
+            string folderName = Path.GetFileName(appDir);
+
+            // Lethe truncates any ID containing "Appearance" (Lethe/Patches/Skin.cs), so such a
+            // name would silently resolve to the wrong appearance later.
+            if (folderName.Contains("Appearance"))
             {
-                MotionData.UnloadAll();
-                break;
+                Logger.LogError($"[Appearance] Folder '{folderName}' cannot contain " +
+                                "\"Appearance\" in its name. Rename it.");
+                continue;
             }
+
+            // ReadBase never returns null - a folder of PNGs and nothing else is a valid mod, and
+            // it falls back to a default donor rather than failing.
+            string donor = AppearanceRegistry.ReadBase(appDir);
+            string customID = AppearanceRegistry.Prefix + folderName;
+            MotionData.CustomAppearanceBases[customID] = donor;
+            RegisterCharacterFolder(appDir, customID);
+
+            Logger.LogWarning($"[Appearance] Registered '{customID}' cloning '{donor}'.");
+        }
+    }
+
+    /// <summary>Handles the three folders under custom_motions/ that hold bundles rather than a
+    /// character. Returns true when <paramref name="charDir"/> was one of them and has been dealt
+    /// with, so the caller knows not to register it as a character.</summary>
+    static bool LoadReservedFolder(string charDir)
+    {
+        if (charDir.Contains("DASHBOARD"))
+        {
+            LoadNamedBundles(charDir, MotionData.dashboardAssets, "dashboard", trimExtension: false);
+            return true;
+        }
+
+        if (charDir.Contains("CUSTOMSCREEN"))
+        {
+            LoadNamedBundles(charDir, MotionData.screenBorderAssets, "screeneffect", trimExtension: true);
+            return true;
+        }
+
+        if (charDir.Contains("MOTIONBUFF_"))
+        {
+            LoadBuffBundles(charDir);
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>Loads every bundle under <paramref name="charDir"/> into a name-keyed store, one
+    /// bundle per name. A same-named bundle dropped in without unloading it leaks past UnloadAll,
+    /// and the next battle then rejects the file as already loaded - so the loser is unloaded here.
+    /// <paramref name="trimExtension"/> is the one thing the two stores disagree on.</summary>
+    static void LoadNamedBundles(string charDir, Dictionary<string, AssetBundle> into, string label,
+                                 bool trimExtension)
+    {
+        foreach (var bundlePath in Directory.GetFiles(charDir, "*.bundle", SearchOption.AllDirectories))
+        {
+            var bundle = LoadBundle(bundlePath);
+            if (bundle == null) continue;
+
+            string assetName = trimExtension ? bundle.GetName().GetBefore(".bundle") : bundle.GetName();
+
+            if (into.ContainsKey(assetName))
+            {
+                Logger.LogError($"Two {label} bundles are named '{assetName}'. " +
+                                $"Ignoring {bundlePath} - rename one and rebuild.");
+                bundle.Unload(false);
+                continue;
+            }
+
+            into.Add(assetName, bundle);
+            Logger.LogWarning($"Loaded bundle {bundle.name} for {label}");
+        }
+    }
+
+    /// <summary>Buff VFX bundles, keyed by the keyword the folder name encodes
+    /// (<c>MOTIONBUFF_&lt;keyword&gt;</c>). Several bundles may share one keyword, so these stack in
+    /// a list rather than colliding the way the dashboard and screen stores do.</summary>
+    static void LoadBuffBundles(string charDir)
+    {
+        string buffId = Path.GetFileName(charDir).Remove(0, "MOTIONBUFF_".Length);
+        Logger.LogWarning($"Discovered directory for Buff: [{buffId}] at path: {charDir}");
+
+        BUFF_UNIQUE_KEYWORD keyword = CustomBuffs.ParseBuffUniqueKeyword(buffId);
+        Logger.LogInfo($"Resolved '{buffId}' -> {(int)keyword}");
+
+        foreach (var bundlePath in Directory.GetFiles(charDir, "*.bundle", SearchOption.AllDirectories))
+        {
+            Logger.LogInfo($"Loading bundle for {buffId}: {bundlePath}");
+
+            var bundle = LoadBundle(bundlePath);
+            if (bundle == null) continue;
+
+            if (!MotionData.LoadedBuffAssets.ContainsKey(keyword))
+                MotionData.LoadedBuffAssets.Add(keyword, new List<AssetBundle>());
+
+            MotionData.LoadedBuffAssets[keyword].Add(bundle);
+
+            Logger.LogWarning($"Loaded motion bundle {bundle.name} for keyword {(int)keyword} ({buffId})");
         }
     }
 

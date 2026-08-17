@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.Timeline;
 using Il2CppInterop.Runtime;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System;
@@ -227,150 +228,134 @@ public static class TimelineBuilder
         return info;
     }
 
+    /// <summary>Writes one coin's phases onto <paramref name="track"/> as game markers. A phase with
+    /// several steps repeats its marker evenly across the phase's slice of the coin, so one authored
+    /// phase can be a multi-hit flurry.</summary>
     public static void SetupSkillFromJson(TrackAsset track, CoinData data)
     {
-        if (data == null)
-        {
-            return;
-        }
-
-        double duration = data.totalDuration;
-        if (data.phases == null || data.phases.Length == 0)
-        {
-            return;
-        }
+        if (data?.phases == null || data.phases.Length == 0) return;
 
         foreach (var phase in data.phases)
         {
-            if (phase.steps <= 0)
-                continue;
-
             for (int i = 0; i < phase.steps; i++)
             {
-                double t = phase.steps == 1
-                    ? 0
-                    : i / (double)(phase.steps - 1);
+                // Single-step phases fire at `start`; the rest spread across start..end inclusive.
+                double t = phase.steps == 1 ? 0 : i / (double)(phase.steps - 1);
+                double time = data.totalDuration * (phase.start + (phase.end - phase.start) * t);
 
-                double time = duration *
-                              (phase.start + (phase.end - phase.start) * t);
-
-                Il2CppSystem.Type markerType = null;
-
-                if (phase.type == "Relative")
-                    markerType = Il2CppType.Of<SkillGiveTiming_TweenMove_Relative>();
-                else if (phase.type == "ToTargetWide")
-                    markerType = Il2CppType.Of<SkillGiveTiming_TweenMove_ToTarget_Wide>();
-                else if (phase.type == "MoveEnemy")
-                    markerType = Il2CppType.Of<SkillGiveTiming_TweenMove_Relative>();
-                else if (phase.type == "GiveDamage")
-                    markerType = Il2CppType.Of<SkillGiveTiming_GiveDamage>();
-                else if (phase.type == "ToTarget")
-                    markerType = Il2CppType.Of<SkillGiveTiming_TweenMove_ToTarget>();
-                else
-                    continue;
-
-                var marker = track.CreateMarker(markerType, time);
-
-                if (phase.type == "Relative")
-                {
-                    var tween = marker.Cast<SkillGiveTiming_TweenMove_Relative>();
-                    tween.moveInfo = MoveRelative(
-                        phase, phase.move != null ? phase.move.ToVector3() : Vector3.zero);
-                }
-                else if (phase.type == "ToTargetWide")
-                {
-                    var tween = marker.Cast<SkillGiveTiming_TweenMove_ToTarget_Wide>();
-
-                    Vector3 moveVec = phase.move != null
-                        ? phase.move.ToVector3()
-                        : Vector3.zero;
-
-                    tween.moveInfo = MoveToTarget(phase);
-
-                    tween.moveInfo_wide = new TweenMoveInfo_ToTarget_Wide
-                    {
-                        arriveRadius_Vector = moveVec
-                    };
-                }
-                else if (phase.type == "ToTarget")
-                {
-                    var tween = marker.Cast<SkillGiveTiming_TweenMove_ToTarget>();
-                    tween.moveInfo = MoveToTarget(phase);
-                }
-                else if (phase.type == "MoveEnemy")
-                {
-                    var tween = marker.Cast<SkillGiveTiming_TweenMove_Relative>();
-
-                    Vector3 moveVec = phase.move != null
-                        ? phase.move.ToVector3()
-                        : Vector3.zero;
-
-                    tween.name = "MoveEnemy";
-                    tween.moveInfo = MoveRelative(phase, moveVec);
-                }
-                else if (phase.type == "GiveDamage")
-                {
-                    var damage = marker.Cast<SkillGiveTiming_GiveDamage>(); // damage = damage to be applied visually
-                    damage.ratios = 1f;
-                    damage.info = new OnGiveDamageInfo
-                    {
-                        multiHit = phase.damage != null ? phase.damage.multiHit : 1,
-                        isUpAttack = phase.damage != null ? phase.damage.isUpAttack : false,
-                        multiHitDuration = phase.damage != null ? phase.damage.multiHitDuration : 0f
-                    };
-
-                    if (phase.damageRatio > 0)
-                    {
-                        damage.ratios = phase.damageRatio;
-                        Logger.LogInfo($"[DamageRatioTest] Damage Ratio has been edited to be {damage.ratios}, with the alteration being {phase.damageRatio}");
-                    }
-
-                    if (phase.sturn != null)
-                    {
-                        STURN_TYPE sType = STURN_TYPE.KNOCKBACK;
-                        bool typeParsed = Il2CppSystem.Enum.TryParse<STURN_TYPE>(phase.sturn.sturnType, true, out sType);
-                        Logger.LogInfo($"[TimelineBuilder] Parsing sturnType: '{phase.sturn.sturnType}' -> {sType} (Success: {typeParsed})");
-
-                        STURN_DIR sDir = STURN_DIR.DIR_TOTARGET;
-                        bool dirParsed = Il2CppSystem.Enum.TryParse<STURN_DIR>(phase.sturn.sturnDir, true, out sDir);
-                        Logger.LogInfo($"[TimelineBuilder] Parsing sturnDir: '{phase.sturn.sturnDir}' -> {sDir} (Success: {dirParsed})");
-
-                        STURN_TIMING sTiming = STURN_TIMING.ALL;
-                        bool timingParsed = Il2CppSystem.Enum.TryParse<STURN_TIMING>(phase.sturn.sturnTiming, true, out sTiming);
-                        Logger.LogInfo($"[TimelineBuilder] Parsing sturnTiming: '{phase.sturn.sturnTiming}' -> {sTiming} (Success: {timingParsed})");
-
-                        damage.sturnInfo = new OnGiveSturnInfo
-                        {
-                            sturnType = sType,
-                            sturnDir = sDir,
-                            sturnTiming = sTiming,
-                            forcePower = phase.sturn.forcePower,
-                            randomPower = phase.sturn.randomPower,
-                            airborneAngle = phase.sturn.airborneAngle,
-                            isRotateTarget = phase.sturn.isRotateTarget,
-                            targetRotateAngle = phase.sturn.targetRotateAngle,
-                        };
-                    }
-                    else
-                    {
-                        damage.sturnInfo = new OnGiveSturnInfo
-                        {
-                            sturnType = STURN_TYPE.KNOCKBACK,
-                            sturnDir = STURN_DIR.DIR_TOTARGET,
-                            sturnTiming = STURN_TIMING.ALL,
-                            forcePower = 5.0f,
-                            randomPower = 5.0f,
-                            airborneAngle = 0.0f,
-                            isRotateTarget = false,
-                            targetRotateAngle = 0.0f,
-                        };
-                    }
-
-                }
+                AddPhaseMarker(track, phase, time);
             }
         }
 
         Logger.LogInfo("[TimelineBuilder] JSON skill setup complete.");
+    }
+
+    /// <summary>One phase, one marker. Creating and configuring the marker live in the same arm on
+    /// purpose: they used to be two if-chains over the same <c>phase.type</c> strings, so adding a
+    /// type meant editing both and forgetting the second left an unconfigured marker on the track.
+    /// An unrecognised type is skipped, which is what makes a typo a no-op rather than a crash.</summary>
+    private static void AddPhaseMarker(TrackAsset track, SkillPhase phase, double time)
+    {
+        Vector3 movePos = phase.move != null ? phase.move.ToVector3() : Vector3.zero;
+
+        switch (phase.type)
+        {
+            case "Relative":
+            {
+                var tween = track.CreateMarker(Il2CppType.Of<SkillGiveTiming_TweenMove_Relative>(), time)
+                                 .Cast<SkillGiveTiming_TweenMove_Relative>();
+                tween.moveInfo = MoveRelative(phase, movePos);
+                break;
+            }
+
+            // Same marker type as Relative, named so the enemy-moving patch can pick it out.
+            case "MoveEnemy":
+            {
+                var tween = track.CreateMarker(Il2CppType.Of<SkillGiveTiming_TweenMove_Relative>(), time)
+                                 .Cast<SkillGiveTiming_TweenMove_Relative>();
+                tween.name = "MoveEnemy";
+                tween.moveInfo = MoveRelative(phase, movePos);
+                break;
+            }
+
+            case "ToTarget":
+            {
+                var tween = track.CreateMarker(Il2CppType.Of<SkillGiveTiming_TweenMove_ToTarget>(), time)
+                                 .Cast<SkillGiveTiming_TweenMove_ToTarget>();
+                tween.moveInfo = MoveToTarget(phase);
+                break;
+            }
+
+            case "ToTargetWide":
+            {
+                var tween = track.CreateMarker(Il2CppType.Of<SkillGiveTiming_TweenMove_ToTarget_Wide>(), time)
+                                 .Cast<SkillGiveTiming_TweenMove_ToTarget_Wide>();
+                tween.moveInfo = MoveToTarget(phase);
+                tween.moveInfo_wide = new TweenMoveInfo_ToTarget_Wide { arriveRadius_Vector = movePos };
+                break;
+            }
+
+            case "GiveDamage":
+            {
+                var damage = track.CreateMarker(Il2CppType.Of<SkillGiveTiming_GiveDamage>(), time)
+                                  .Cast<SkillGiveTiming_GiveDamage>();
+
+                damage.ratios = phase.damageRatio > 0 ? phase.damageRatio : 1f;
+                damage.info = new OnGiveDamageInfo
+                {
+                    multiHit = phase.damage != null ? phase.damage.multiHit : 1,
+                    isUpAttack = phase.damage != null && phase.damage.isUpAttack,
+                    multiHitDuration = phase.damage != null ? phase.damage.multiHitDuration : 0f
+                };
+                damage.sturnInfo = Sturn(phase.sturn);
+                break;
+            }
+        }
+    }
+
+    /// <summary>The knockback a GiveDamage phase applies. <paramref name="sturn"/> null means the
+    /// phase did not ask for one, and the defaults below are the ones every unconfigured hit used
+    /// before the field existed - so omitting it keeps the old behaviour.</summary>
+    private static OnGiveSturnInfo Sturn(SturnData sturn)
+    {
+        if (sturn == null)
+        {
+            return new OnGiveSturnInfo
+            {
+                sturnType = STURN_TYPE.KNOCKBACK,
+                sturnDir = STURN_DIR.DIR_TOTARGET,
+                sturnTiming = STURN_TIMING.ALL,
+                forcePower = 5.0f,
+                randomPower = 5.0f,
+            };
+        }
+
+        return new OnGiveSturnInfo
+        {
+            sturnType = ParseOr(sturn.sturnType, STURN_TYPE.KNOCKBACK, nameof(sturn.sturnType)),
+            sturnDir = ParseOr(sturn.sturnDir, STURN_DIR.DIR_TOTARGET, nameof(sturn.sturnDir)),
+            sturnTiming = ParseOr(sturn.sturnTiming, STURN_TIMING.ALL, nameof(sturn.sturnTiming)),
+            forcePower = sturn.forcePower,
+            randomPower = sturn.randomPower,
+            airborneAngle = sturn.airborneAngle,
+            isRotateTarget = sturn.isRotateTarget,
+            targetRotateAngle = sturn.targetRotateAngle,
+        };
+    }
+
+    /// <summary>One sturn enum field, falling back to the documented default. The fallback is
+    /// returned rather than pre-assigned to the out parameter: Enum.TryParse overwrites that with
+    /// <c>default(T)</c> on failure, which is NONE for all three of these - so a typo used to
+    /// silently produce a no-knockback hit instead of the default one it names.</summary>
+    private static T ParseOr<T>(string text, T fallback, string field) where T : unmanaged, Enum
+    {
+        if (string.IsNullOrEmpty(text)) return fallback;
+
+        if (Il2CppSystem.Enum.TryParse<T>(text, true, out T parsed)) return parsed;
+
+        Logger.LogWarning($"[TimelineBuilder] {field}: '{text}' is not a valid {typeof(T).Name}, " +
+                          $"using {fallback}.");
+        return fallback;
     }
 
 
@@ -378,137 +363,187 @@ public static class TimelineBuilder
     /// Clones the original timeline, keeps it intact, but prunes the contents of specific tracks.
     /// Returns a list of timelines, one for each coin, with graduated hitmarkers.
     /// </summary>
-    public static System.Collections.Generic.List<TimelineAsset> GetTimelines(string timelineName, string jsonPath, TimelineAsset bundleTimeline = null, string appearanceID = null, System.Collections.Generic.List<TrackAsset> originalVfxTracks = null, int variantIndex = 0, double?[] coinDurations = null)
+    public static List<TimelineAsset> GetTimelines(
+        string timelineName,
+        string jsonPath,
+        TimelineAsset bundleTimeline = null,
+        string appearanceID = null,
+        List<TrackAsset> originalVfxTracks = null,
+        int variantIndex = 0,
+        double?[] coinDurations = null)
     {
-        // 1. Load JSON data
         SkillData data = LoadSkillData(jsonPath);
 
-        var timelines = new System.Collections.Generic.List<TimelineAsset>();
+        // No JSON, or a JSON carrying only settings: fall back to a dummy coin, which both clears
+        // the game's default logic and keeps the bundle's own timeline injectable.
+        if (data?.coins == null || data.coins.Length == 0)
+            data = OneFallbackCoin(data, bundleTimeline, coinDurations);
 
-        // No JSON, or a JSON carrying only settings: fall back to a dummy coin, which both clears the
-        // game's default logic and keeps the bundle's own timeline injectable.
-        if (data == null || data.coins == null || data.coins.Length == 0)
-        {
-            // The common case for a sprite-only mod: PNGs and no S1.json at all.
-            double fallback = 1.0;
-            if (bundleTimeline != null) fallback = bundleTimeline.duration;
-
-            bool fromSpriteMotion = coinDurations != null && coinDurations.Length > 0 && coinDurations[0].HasValue;
-            if (fromSpriteMotion) fallback = coinDurations[0].Value;
-
-            // The hit checker is where the coin may hand off, so the usual 0.15 default silently
-            // truncates the animation to 15% of its length. A bundle author has a timeline in front
-            // of them and learns this; someone who dropped PNGs in a folder just sees their two-second
-            // animation stop after a third of a second, with nothing logged. So when the length came
-            // from a sprite motion and there is no JSON to say otherwise, hand off at the end instead.
-            // Writing an explicit hitCheckers array still overrides this, and bundles are untouched.
-            var defaultHitCheckers = fromSpriteMotion
-                ? new HitCheckerData[] { new HitCheckerData { time = 1.0, isNextMotionCoinDelay = 0f } }
-                : new HitCheckerData[0];
-
-            data ??= new SkillData();
-            data.coins = new CoinData[]
-            {
-                new CoinData
-                {
-                    totalDuration = fallback,
-                    phases = new SkillPhase[0],
-                    hitCheckers = defaultHitCheckers
-                }
-            };
-        }
+        var timelines = new List<TimelineAsset>();
 
         for (int coinIdx = 0; coinIdx < data.coins.Length; coinIdx++)
         {
-            var coinData = data.coins[coinIdx];
+            string name = $"{NamePrefix}{timelineName}_Var{variantIndex}_Coin_{coinIdx}";
+            double sourceDuration = SourceDuration(data.coins[coinIdx], bundleTimeline,
+                                                   coinDurations, coinIdx);
 
-            // How long the animation itself runs, used only when the JSON declines to say.
-            double sourceDuration = bundleTimeline != null ? bundleTimeline.duration : coinData.totalDuration;
-
-            // A sprite motion is what actually plays, so its length wins over the bundle's.
-            if (coinDurations != null && coinIdx < coinDurations.Length && coinDurations[coinIdx].HasValue)
-                sourceDuration = coinDurations[coinIdx].Value;
-
-
-            double targetDuration = coinData.totalDuration > 0 ? coinData.totalDuration : sourceDuration;
-            coinData.totalDuration = targetDuration;
-
-            TimelineAsset dummyTimeline = ScriptableObject.CreateInstance<TimelineAsset>();
-            dummyTimeline.name = $"{NamePrefix}{timelineName}_Var{variantIndex}_Coin_{coinIdx}";
-
-            int animTrackIdx = 0;
-
-            if (bundleTimeline != null)
-            {
-                foreach (var bundleTrack in bundleTimeline.flattenedTracks)
-                {
-                    var trackType = bundleTrack.GetIl2CppType().Name;
-                    Logger.LogInfo($"[TimelineBuilder] Found track: '{bundleTrack.name}' of type: '{trackType}'");
-                    if (trackType.Contains("AnimationTrack"))
-                    {
-                        var newTrack = dummyTimeline.CreateTrack(Il2CppType.Of<AnimationTrack>(), null, $"Animation Track {animTrackIdx++}");
-                        var animTrack = newTrack.Cast<AnimationTrack>();
-
-                        foreach (var bundleClip in bundleTrack.clips)
-                        {
-                            var clip = animTrack.CreateClip<AnimationPlayableAsset>();
-                            clip.start = bundleClip.start;
-                            clip.duration = bundleClip.duration;
-                        }
-                    }
-                }
-            }
-            else
-            {
-                var newTrack = dummyTimeline.CreateTrack(Il2CppType.Of<AnimationTrack>(), null, "Animation Track 0");
-                var animTrack = newTrack.Cast<AnimationTrack>();
-                var clip = animTrack.CreateClip<AnimationPlayableAsset>();
-                clip.start = 0.0;
-                clip.duration = targetDuration;
-            }
-
-            var appearanceTrack = dummyTimeline.CreateTrack(Il2CppType.Of<CharacterAppearanceTimelineTrack>(), null, "Appearance Track").Cast<TrackAsset>();
-            var skillTrack = dummyTimeline.CreateTrack(Il2CppType.Of<SkillGiveTimingTrack>(), null, "Skill Timing Track").Cast<TrackAsset>();
-            var onBattleCamZoomTrack = dummyTimeline.CreateTrack(Il2CppType.Of<OnBattleCamZoomTrack_Transform>(), null, "On Battle Cam Zoom Track").Cast<TrackAsset>();
-            var onBattleCamRotateTrack = dummyTimeline.CreateTrack(Il2CppType.Of<OnBattleCamRotateTrack>(), null, "On Battle Cam Rotate Track").Cast<TrackAsset>();
-
-            SetupAppearanceTrackMarkers(appearanceTrack, coinData);
-            SetupSkillFromJson(skillTrack, coinData);
-            SetupBattleCamZoomFromJson(onBattleCamZoomTrack, coinData);
-            SetupBattleCamRotateFromJson(onBattleCamRotateTrack, coinData);
-
-            // Native camera shake markers: CharacterApperacneResiver handles these automatically.
-            SetupCameraShakeMarkers(appearanceTrack, coinData);
-
-            // VFX: coinData.vfx indices into originalVfxTracks (1-indexed)
-            if (coinData.vfx != null && coinData.vfx.Length > 0 && originalVfxTracks != null)
-            {
-                foreach (int idx in coinData.vfx)
-                {
-                    int i = idx - 1;
-                    if (i < 0 || i >= originalVfxTracks.Count) continue;
-                    var origTrack = originalVfxTracks[i];
-                    var newTrack = dummyTimeline.CreateTrack(origTrack.GetIl2CppType(), null, origTrack.name);
-                    foreach (var c in origTrack.clips)
-                    {
-                        if (c.asset == null) continue;
-                        var newClip = newTrack.CreateClip(c.asset.GetIl2CppType());
-                        newClip.displayName = c.displayName;
-                        newClip.start = c.start;
-                        newClip.duration = c.duration;
-                        newClip.asset = c.asset;
-                    }
-                }
-            }
-
-            // Without this the timeline's length collapses to its longest clip, which cuts short any
-            // motion whose clips don't span the whole duration (parries, guard).
-            dummyTimeline.durationMode = TimelineAsset.DurationMode.FixedLength;
-            dummyTimeline.fixedDuration = targetDuration;
-
-            timelines.Add(dummyTimeline);
+            timelines.Add(BuildCoinTimeline(name, data.coins[coinIdx], sourceDuration,
+                                            bundleTimeline, originalVfxTracks));
         }
 
         return timelines;
+    }
+
+    /// <summary>The stand-in for a character with no skill JSON: one coin, as long as whatever is
+    /// actually going to play.</summary>
+    private static SkillData OneFallbackCoin(SkillData data, TimelineAsset bundleTimeline,
+                                             double?[] coinDurations)
+    {
+        // The common case for a sprite-only mod: PNGs and no S1.json at all.
+        bool fromSpriteMotion = coinDurations != null && coinDurations.Length > 0
+                                && coinDurations[0].HasValue;
+
+        double fallback = fromSpriteMotion ? coinDurations[0].Value
+            : bundleTimeline != null ? bundleTimeline.duration
+            : 1.0;
+
+        // The hit checker is where the coin may hand off, so the usual 0.15 default silently
+        // truncates the animation to 15% of its length. A bundle author has a timeline in front of
+        // them and learns this; someone who dropped PNGs in a folder just sees their two-second
+        // animation stop after a third of a second, with nothing logged. So when the length came
+        // from a sprite motion and there is no JSON to say otherwise, hand off at the end instead.
+        // Writing an explicit hitCheckers array still overrides this, and bundles are untouched.
+        var defaultHitCheckers = fromSpriteMotion
+            ? new HitCheckerData[] { new HitCheckerData { time = 1.0, isNextMotionCoinDelay = 0f } }
+            : new HitCheckerData[0];
+
+        data ??= new SkillData();
+        data.coins = new CoinData[]
+        {
+            new CoinData
+            {
+                totalDuration = fallback,
+                phases = new SkillPhase[0],
+                hitCheckers = defaultHitCheckers
+            }
+        };
+
+        return data;
+    }
+
+    /// <summary>How long the animation itself runs, used only when the JSON declines to say. A
+    /// sprite motion is what actually plays, so its length wins over the bundle's.</summary>
+    private static double SourceDuration(CoinData coinData, TimelineAsset bundleTimeline,
+                                         double?[] coinDurations, int coinIdx)
+    {
+        if (coinDurations != null && coinIdx < coinDurations.Length && coinDurations[coinIdx].HasValue)
+            return coinDurations[coinIdx].Value;
+
+        return bundleTimeline != null ? bundleTimeline.duration : coinData.totalDuration;
+    }
+
+    /// <summary>One coin's timeline: the animation clips, then the four marker tracks the game reads
+    /// its timings off, then whichever of the bundle's VFX tracks this coin asked for.</summary>
+    private static TimelineAsset BuildCoinTimeline(string name, CoinData coinData,
+                                                   double sourceDuration,
+                                                   TimelineAsset bundleTimeline,
+                                                   List<TrackAsset> originalVfxTracks)
+    {
+        double targetDuration = coinData.totalDuration > 0 ? coinData.totalDuration : sourceDuration;
+        coinData.totalDuration = targetDuration;
+
+        TimelineAsset dummyTimeline = ScriptableObject.CreateInstance<TimelineAsset>();
+        dummyTimeline.name = name;
+
+        AddAnimationTracks(dummyTimeline, bundleTimeline, targetDuration);
+
+        var appearanceTrack = dummyTimeline.CreateTrack(Il2CppType.Of<CharacterAppearanceTimelineTrack>(), null, "Appearance Track").Cast<TrackAsset>();
+        var skillTrack = dummyTimeline.CreateTrack(Il2CppType.Of<SkillGiveTimingTrack>(), null, "Skill Timing Track").Cast<TrackAsset>();
+        var onBattleCamZoomTrack = dummyTimeline.CreateTrack(Il2CppType.Of<OnBattleCamZoomTrack_Transform>(), null, "On Battle Cam Zoom Track").Cast<TrackAsset>();
+        var onBattleCamRotateTrack = dummyTimeline.CreateTrack(Il2CppType.Of<OnBattleCamRotateTrack>(), null, "On Battle Cam Rotate Track").Cast<TrackAsset>();
+
+        SetupAppearanceTrackMarkers(appearanceTrack, coinData);
+        SetupSkillFromJson(skillTrack, coinData);
+        SetupBattleCamZoomFromJson(onBattleCamZoomTrack, coinData);
+        SetupBattleCamRotateFromJson(onBattleCamRotateTrack, coinData);
+
+        // Native camera shake markers: CharacterApperacneResiver handles these automatically.
+        SetupCameraShakeMarkers(appearanceTrack, coinData);
+
+        CopyVfxTracks(dummyTimeline, coinData, originalVfxTracks);
+
+        // Without this the timeline's length collapses to its longest clip, which cuts short any
+        // motion whose clips don't span the whole duration (parries, guard).
+        dummyTimeline.durationMode = TimelineAsset.DurationMode.FixedLength;
+        dummyTimeline.fixedDuration = targetDuration;
+
+        return dummyTimeline;
+    }
+
+    /// <summary>Mirrors the bundle's animation tracks onto the new timeline, clip timings and all.
+    /// With no bundle - a sprite-only motion - one empty clip spanning the coin stands in, so the
+    /// director still has something to run its clock against.</summary>
+    private static void AddAnimationTracks(TimelineAsset into, TimelineAsset bundleTimeline,
+                                           double targetDuration)
+    {
+        if (bundleTimeline == null)
+        {
+            var soloTrack = into.CreateTrack(Il2CppType.Of<AnimationTrack>(), null, "Animation Track 0")
+                                .Cast<AnimationTrack>();
+            var soloClip = soloTrack.CreateClip<AnimationPlayableAsset>();
+            soloClip.start = 0.0;
+            soloClip.duration = targetDuration;
+            return;
+        }
+
+        int animTrackIdx = 0;
+
+        foreach (var bundleTrack in bundleTimeline.flattenedTracks)
+        {
+            var trackType = bundleTrack.GetIl2CppType().Name;
+            Logger.LogInfo($"[TimelineBuilder] Found track: '{bundleTrack.name}' of type: '{trackType}'");
+
+            if (!trackType.Contains("AnimationTrack")) continue;
+
+            var animTrack = into.CreateTrack(Il2CppType.Of<AnimationTrack>(), null,
+                                             $"Animation Track {animTrackIdx++}")
+                                .Cast<AnimationTrack>();
+
+            foreach (var bundleClip in bundleTrack.clips)
+            {
+                var clip = animTrack.CreateClip<AnimationPlayableAsset>();
+                clip.start = bundleClip.start;
+                clip.duration = bundleClip.duration;
+            }
+        }
+    }
+
+    /// <summary>Copies over the bundle VFX tracks this coin named. coinData.vfx holds 1-based
+    /// indices into the bundle's VFX tracks; an index pointing at nothing is skipped, so a stale
+    /// number in the JSON costs that one effect rather than the whole coin.</summary>
+    private static void CopyVfxTracks(TimelineAsset into, CoinData coinData,
+                                      List<TrackAsset> originalVfxTracks)
+    {
+        if (coinData.vfx == null || coinData.vfx.Length == 0 || originalVfxTracks == null) return;
+
+        foreach (int idx in coinData.vfx)
+        {
+            int i = idx - 1;
+            if (i < 0 || i >= originalVfxTracks.Count) continue;
+
+            var origTrack = originalVfxTracks[i];
+            var newTrack = into.CreateTrack(origTrack.GetIl2CppType(), null, origTrack.name);
+
+            foreach (var c in origTrack.clips)
+            {
+                if (c.asset == null) continue;
+
+                var newClip = newTrack.CreateClip(c.asset.GetIl2CppType());
+                newClip.displayName = c.displayName;
+                newClip.start = c.start;
+                newClip.duration = c.duration;
+                newClip.asset = c.asset;
+            }
+        }
     }
 }

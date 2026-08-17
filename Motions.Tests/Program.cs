@@ -395,6 +395,37 @@ static class Program
         Check(PropSpec.Validate(new PropEntry { folder = "f", parkUntil = "round" }) == null,
               "parkUntil round is valid");
 
+        Console.WriteLine("PropActionKind");
+        Check(PropActionKind.Find("strike") is StrikeKind, "strike resolves to StrikeKind");
+        Check(PropActionKind.Find("PLANT") is PlantKind, "do is matched case-insensitively");
+        // PropAction defaults `do` to "strike"; an author who writes null gets the same.
+        Check(PropActionKind.Find(null) is StrikeKind, "an absent do is a strike");
+        Check(PropActionKind.Find("orbit") == null, "an unregistered kind does not resolve");
+        Check(PropActionKind.Find("strike").MovesSlots && !PropActionKind.Find("strike").OneShot,
+              "a strike moves slots and is not one-shot");
+        Check(PropActionKind.Find("plant").OneShot && !PropActionKind.Find("plant").MovesSlots,
+              "a plant is one-shot and moves no slots");
+
+        // The rule this replaced: everything that was not a plant was treated as a strike, so a
+        // typo'd kind loaded clean and then behaved as a strike nobody had authored.
+        Check(PropSpec.Validate(new PropEntry {
+                  folder = "f",
+                  actions = new[] { new PropAction { @do = "strke", motion = "S1" } } }) != null,
+              "an unknown do is rejected at load");
+        Check(PropSpec.Validate(new PropEntry {
+                  folder = "f",
+                  actions = new[] { new PropAction { @do = "strike", motion = "S1" } } }) == null,
+              "an explicit do: strike is still valid");
+        // A world entry has no ring for a strike to leave, and that is the strike kind's own rule.
+        Check(PropSpec.Validate(new PropEntry {
+                  folder = "f", anchor = "world",
+                  actions = new[] { new PropAction { motion = "S1" } } }) != null,
+              "a strike on a world entry is rejected");
+        Check(PropSpec.Validate(new PropEntry {
+                  folder = "f", anchor = "world",
+                  actions = new[] { new PropAction { @do = "plant", motion = "S1" } } }) == null,
+              "a plant on a world entry is fine");
+
         Console.WriteLine();
         Console.WriteLine(failures == 0 ? "ALL PASS" : $"{failures} FAILURE(S)");
         Environment.Exit(failures == 0 ? 0 : 1);

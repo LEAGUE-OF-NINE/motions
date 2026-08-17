@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  ChevronDown, FolderOpen, Play, Plus, RotateCcw, Save, Square, TriangleAlert,
+  ChevronDown, FolderOpen, Play, Plus, Save, Square, TriangleAlert,
 } from 'lucide-react'
+import AssetPalette from './AssetPalette'
 import Canvas, { ZOOM_MAX, ZOOM_MIN } from './Canvas'
 import Inspector from './Inspector'
 import MotionPicker from './MotionPicker'
-import NewCharacter from './NewCharacter'
-import CoinTimings from './CoinTimings'
+import OpenScreen, { UnsupportedScreen } from './OpenScreen'
+import SkillSection from './SkillSection'
 import Timeline from './Timeline'
-import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -24,11 +25,11 @@ import { Separator } from '@/components/ui/separator'
 import { Slider } from '@/components/ui/slider'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
-  Candidate, DEFAULT_BASE, LoadedCharacter, Mode, createCharacter, ensurePermission,
-  findCharacters, importAssets, isModsRoot, loadCharacter, nameRejection, pickFolder, recallFolder,
-  rememberFolder, revokeAssets, writeFile,
+  Candidate, DEFAULT_BASE, Known, LoadedCharacter, Mode, createCharacter, ensurePermission,
+  findCharacters, importAssets, isModsRoot, known, loadCharacter, nameRejection, pickFolder,
+  recallFolder, rememberFolder, revokeAssets, writeFile,
 } from './fs'
-import { MOTION_NAMES, MotionEntry, mergeMotions, slotFor, spriteFor } from './motions'
+import { MotionEntry, mergeMotions, slotFor, spriteFor } from './motions'
 import { boundsOf } from './png'
 import { AnimationSpec, DEFAULT_FPS, Frame, frameIndexAt, serialiseSpec } from './spec'
 import { Coin, Skill, newCoin, serialiseSkill, withCoin } from './skill'
@@ -59,17 +60,6 @@ const INTERACTIVE = [
 /** What to show the user when a filesystem call rejects. DOMException.message is the useful part. */
 function why(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
-}
-
-/** A candidate the path already settled the kind of: the only kind that can be opened directly. */
-type Known = Candidate & { mode: Mode }
-
-/**
- * Only a single directly-picked folder can have an unsettled kind, so anything found by descending
- * is already known. Filtering says that in a way the types carry, rather than asserting it.
- */
-function known(candidates: Candidate[]): Known[] {
-  return candidates.filter((c): c is Known => c.mode !== null)
 }
 
 export default function App() {
@@ -800,164 +790,26 @@ export default function App() {
     setPlayhead(null)
   }
 
-  if (!SUPPORTED) {
-    return (
-      <main className="mx-auto max-w-xl p-8">
-        <h1 className="text-xl font-semibold">Motions: sprite motion editor</h1>
-        <Alert className="mt-4">
-          <TriangleAlert />
-          <AlertTitle>This editor needs Chrome or Edge</AlertTitle>
-          <AlertDescription>
-            It writes straight into your mod folder, and Firefox and Safari cannot do that yet.
-          </AlertDescription>
-        </Alert>
-      </main>
-    )
-  }
+  if (!SUPPORTED) return <UnsupportedScreen />
 
   if (!character) {
     return (
-      <main className="mx-auto max-w-2xl p-8">
-        <h1 className="text-xl font-semibold">Motions: sprite motion editor</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Open your mod folder. The editor finds the characters in it the same way the plugin
-          does. Nothing is written until you save.
-        </p>
-
-        <div className="mt-6 flex flex-wrap items-center gap-2">
-          <Button size="lg" onClick={() => void choose()}>
-            <FolderOpen className="size-4" />
-            Open mod folder
-          </Button>
-          <Button size="lg" variant="outline" onClick={() => void startNewCharacter()}>
-            <Plus className="size-4" />
-            Start a new mod
-          </Button>
-        </div>
-
-        <p className="mt-3 text-xs text-muted-foreground">
-          A mod folder, a <code>motion_appearances/</code> or <code>custom_motions/</code> folder,
-          or a single character folder all work. Starting a new one asks for an empty
-          folder; the file picker can make you one.
-        </p>
-
-        {creating && (
-          <NewCharacter
-            modName={creating.handle.name}
-            insideModsRoot={creating.modsRoot}
-            onCancel={() => setCreating(null)}
-            onCreate={(name, mode, modFolder) =>
-              void createCharacterIn(creating.handle, name, mode, modFolder)}
-          />
-        )}
-
-        {/* The mods folder is refused rather than worked with: a character created in it would
-            land at mods/motion_appearances/<Name>/, which the plugin reads as a mod named
-            "motion_appearances" holding nothing. It loads, finds no character, and says nothing.
-            A mod folder has to exist first, so that is what the button offers to make. */}
-        {empty?.modsRoot && !creating && (
-          <Alert className="mt-6">
-            <TriangleAlert />
-            <AlertTitle>{empty.handle.name} is the mods folder, not a mod</AlertTitle>
-            <AlertDescription>
-              <p>
-                Every folder inside it is a separate mod, and the plugin loads them one by one.
-                A character put directly in here would sit outside all of them and never load,
-                so this is as far as it goes.
-              </p>
-              <p>Name a mod and it gets made inside, with the character in it.</p>
-            </AlertDescription>
-            <AlertAction>
-              <Button size="sm" onClick={() => { setEmpty(null); setCreating(empty) }}>
-                <Plus className="size-3.5" />
-                New mod here
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => { setEmpty(null); void choose() }}>
-                Pick a mod instead
-              </Button>
-            </AlertAction>
-          </Alert>
-        )}
-
-        {empty && !empty.modsRoot && !creating && (
-          <div className="mt-6 rounded-lg border p-4">
-            <p className="text-sm font-medium">{empty.handle.name} holds no character yet.</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Nothing in it that the plugin would load: no <code>motion_appearances/</code> or{' '}
-              <code>custom_motions/</code>, and no <code>motions/</code>, <code>.bundle</code> or
-              skill JSON of its own. That is exactly what a new mod folder looks like, or you
-              picked the wrong folder.
-            </p>
-            <div className="mt-3 flex gap-2">
-              <Button size="sm" onClick={() => { setEmpty(null); setCreating(empty) }}>
-                <Plus className="size-3.5" />
-                Create a character here
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => { setEmpty(null); void choose() }}>
-                Pick a different folder
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* The only place the two kinds are ever put to the author, and only for a folder with
-            nothing above or inside it to settle the question. */}
-        {asking && (
-          <div className="mt-6 rounded-lg border p-4">
-            <p className="text-sm font-medium">Is {asking.path} a new character, or an override?</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Opened on its own, so there is no <code>motion_appearances/</code> or{' '}
-              <code>custom_motions/</code> above it to say, and no <code>appearance.json</code> in
-              it yet. This only changes what the editor tells you. Pick either and reopen from
-              the mod folder if it turns out wrong.
-            </p>
-            <div className="mt-3 flex gap-2">
-              <Button variant="outline" size="sm"
-                      onClick={() => { setAsking(null); void open(asking.handle, 'appearance') }}>
-                A character of my own
-              </Button>
-              <Button variant="outline" size="sm"
-                      onClick={() => { setAsking(null); void open(asking.handle, 'override') }}>
-                An override of an existing one
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Only when the pick was ambiguous. A single hit opened straight away and never lands
-            here; the list is still kept, for the switcher in the header. */}
-        {known(choices).length > 1 && (
-          <div className="mt-6 rounded-lg border p-4">
-            <p className="text-sm font-medium">
-              That mod holds {known(choices).length} characters. Which one?
-            </p>
-            <div className="mt-3 flex flex-col items-start gap-1">
-              {known(choices).map((c) => (
-                <Button key={c.path} variant="ghost" size="sm" className="font-mono text-xs"
-                        onClick={() => void open(c.handle, c.mode)}>
-                  <FolderOpen className="size-3.5 opacity-60" />
-                  {c.path}
-                </Button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {recalled && (
-          <Button variant="ghost" size="sm" className="mt-4"
-                  onClick={() => void open(recalled.handle, recalled.mode)}>
-            <RotateCcw className="size-3.5 opacity-60" />
-            Reopen {recalled.handle.name}
-          </Button>
-        )}
-
-        {problem && (
-          <Alert variant="destructive" className="mt-4">
-            <TriangleAlert />
-            <AlertDescription className="whitespace-pre-line">{problem}</AlertDescription>
-          </Alert>
-        )}
-      </main>
+      <OpenScreen
+        recalled={recalled}
+        choices={choices}
+        asking={asking}
+        creating={creating}
+        empty={empty}
+        problem={problem}
+        onPick={() => void choose()}
+        onStartNew={() => void startNewCharacter()}
+        onOpen={(handle, mode) => void open(handle, mode)}
+        onCreate={(picked, name, mode, modFolder) =>
+          void createCharacterIn(picked, name, mode, modFolder)}
+        setAsking={setAsking}
+        setCreating={setCreating}
+        setEmpty={setEmpty}
+      />
     )
   }
 
@@ -1285,66 +1137,23 @@ export default function App() {
                     setSfxIndex(null)
                   }}
                 />
-                <div className="w-44 shrink-0 overflow-y-auto border-l p-3">
-                  <div className="text-xs font-medium">Sprites</div>
-                  <p className="mt-1 text-[10px] leading-tight text-muted-foreground">
-                    Every PNG in this folder. Adds a frame at the end. Drop PNGs onto the canvas
-                    to import more.
-                  </p>
-                  {/* Used sprites stay in the list. They were filtered out, which read as
-                      "unused assets" but meant a sprite could never be placed twice: a held pose
-                      and a there-and-back cycle both reuse the same PNG, and neither was possible
-                      without hand-editing the JSON. The tag says which are not on the timeline
-                      yet, which is the part that was actually worth knowing. */}
-                  <div className="mt-2 flex flex-col gap-1">
-                    {[...here.assets.keys()].map((name) => {
-                      const used = spec.frames.some((f) => f.sprite === name)
-                      return (
-                        <Button key={name} variant="outline" size="sm"
-                                title={used ? `Adds another frame using ${name}` : `Adds ${name}`}
-                                className="w-full justify-start font-mono text-[11px]"
-                                onClick={() => editSpec((s) => {
-                                  s.frames = addFrameAt(s.frames, name, s.duration)
-                                  s.duration = s.duration + 1 / DEFAULT_FPS
-                                  return s
-                                })}>
-                          <Plus className="size-3 shrink-0 opacity-50" />
-                          <span className="truncate">{name}</span>
-                          {!used && (
-                            <span className="ml-auto shrink-0 text-[9px] font-sans text-muted-foreground">
-                              unused
-                            </span>
-                          )}
-                        </Button>
-                      )
-                    })}
-                  </div>
-
-                  {/* Sounds were never filtered by "already used" for the same reason: one sound
-                      can fire several times in a motion. */}
-                  <div className="mt-4 text-xs font-medium">Sounds</div>
-                  <p className="mt-1 text-[10px] leading-tight text-muted-foreground">
-                    {here.sounds.size > 0
-                      ? 'Adds at the frame you are on. Drag it afterwards.'
-                      : 'Drop a .wav or .ogg onto the canvas to bring one in.'}
-                  </p>
-                  <div className="mt-2 flex flex-col gap-1">
-                    {[...here.sounds.keys()].map((name) => (
-                      <Button key={name} variant="outline" size="sm"
-                              className="w-full justify-start font-mono text-[11px]"
-                              onClick={() => {
-                                // At the current frame's time, which is where someone looking at
-                                // a hit frame wants the hit sound. 0 would need dragging every time.
-                                const at = spec.frames[frameIndex]?.t ?? 0
-                                editSpec((s) => ({ ...s, sfx: addSfx(s.sfx, name, at) }))
-                                setSfxIndex(spec.sfx.length)
-                              }}>
-                        <Plus className="size-3 shrink-0 opacity-50" />
-                        <span className="truncate">{name}</span>
-                      </Button>
-                    ))}
-                  </div>
-                </div>
+                <AssetPalette
+                  assets={here.assets}
+                  sounds={here.sounds}
+                  spec={spec}
+                  onAddSprite={(name) => editSpec((s) => {
+                    s.frames = addFrameAt(s.frames, name, s.duration)
+                    s.duration = s.duration + 1 / DEFAULT_FPS
+                    return s
+                  })}
+                  onAddSound={(name) => {
+                    // At the current frame's time, which is where someone looking at a hit frame
+                    // wants the hit sound. 0 would need dragging every time.
+                    const at = spec.frames[frameIndex]?.t ?? 0
+                    editSpec((s) => ({ ...s, sfx: addSfx(s.sfx, name, at) }))
+                    setSfxIndex(spec.sfx.length)
+                  }}
+                />
               </div>
 
               <Button variant="outline" size="sm" className="mt-3"
@@ -1384,81 +1193,29 @@ export default function App() {
         </p>
       )}
 
-      {/* The other half of the same coin. Under the sprite timeline rather than behind a tab of
-          its own, on the axis Timeline and SkillTimeline now share: a phase reads against the
-          frame it fires on. */}
+      {/* The three edit callbacks assert skillIndex: SkillSection only reaches them from the
+          branches where `file` is non-null, which is exactly when skillIndex is. */}
       {entry && (
-        skillIndex === null ? (
-          // Only for a name the plugin would actually open: it walks MOTION_DETAIL looking for
-          // <name>.json (fs.ts:116-118), so offering to create MyMotion.json offers a file
-          // nothing reads.
-          MOTION_NAMES.includes(entry.base) && (
-            <div className="mt-4 rounded-lg border p-4">
-              <p className="text-sm font-medium">No <code>{entry.base}.json</code> yet.</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                That is where this motion's phases, hit checkers and camera work live. Without one
-                the game builds a single coin that hands off at the end of the animation.
-              </p>
-              <Button size="sm" className="mt-3" onClick={() => void createSkillFile(entry.base)}>
-                <Plus className="size-3.5" />
-                Create {entry.base}.json
-              </Button>
-            </div>
-          )
-        ) : doc === null ? (
-          // A file the editor cannot parse is shown, never rewritten. Offering an editor over a
-          // document it failed to read would mean saving a guess over someone's file.
-          <Alert variant="destructive" className="mt-4">
-            <TriangleAlert />
-            <AlertDescription>
-              <p>
-                <strong>{character.skills[skillIndex].name}</strong> could not be read:{' '}
-                {character.skills[skillIndex].error}
-              </p>
-              <p>
-                It is left exactly as it is on disk, and its timings are not editable here. Fix it
-                in a text editor and reopen the character. The sprite frames above are unaffected.
-              </p>
-            </AlertDescription>
-          </Alert>
-        ) : doc.coins[coin] ? (
-          <CoinTimings
-            coin={doc.coins[coin]}
-            duration={durationOf(entry, coin)}
-            warning={character.skills[skillIndex].warning}
-            selected={marker}
-            onSelect={setMarker}
-            onEdit={(patch) => editCoin(skillIndex, coin, patch)}
-            onRemoveCoin={() => {
-              editSkill(skillIndex, (s) => { s.coins.splice(coin, 1); return s })
-              setCoin(Math.max(0, coin - 1))
-              setMarker(null)
-            }}
-          />
-        ) : (
-          <div className="mt-4 rounded-lg border p-4">
-            <p className="text-sm font-medium">
-              No coin {coin + 1} in <code>{character.skills[skillIndex].name}</code>.
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {/* TimelineBuilder emits one timeline per coins[] entry, so art past the end of that
-                  array is never built into anything the game plays. */}
-              The game builds one coin per entry in that file, so nothing here plays until it has
-              a coin {coin + 1}.
-              {coin > doc.coins.length && (
-                ` Adding it also creates coins ${doc.coins.length + 1}-${coin}, since the list cannot have a gap.`
-              )}
-            </p>
-            <Button size="sm" className="mt-3"
-                    onClick={() => {
-                      editSkill(skillIndex, (s) => ({ ...s, coins: withCoin(s.coins, coin) }))
-                      setMarker(null)
-                    }}>
-              <Plus className="size-3.5" />
-              Add coin {coin + 1} to {character.skills[skillIndex].name}
-            </Button>
-          </div>
-        )
+        <SkillSection
+          entry={entry}
+          coin={coin}
+          file={skillIndex === null ? null : character.skills[skillIndex]}
+          doc={doc}
+          duration={durationOf(entry, coin)}
+          marker={marker}
+          onSelectMarker={setMarker}
+          onCreateFile={(name) => void createSkillFile(name)}
+          onEditCoin={(patch) => editCoin(skillIndex!, coin, patch)}
+          onAddCoin={() => {
+            editSkill(skillIndex!, (s) => ({ ...s, coins: withCoin(s.coins, coin) }))
+            setMarker(null)
+          }}
+          onRemoveCoin={() => {
+            editSkill(skillIndex!, (s) => { s.coins.splice(coin, 1); return s })
+            setCoin(Math.max(0, coin - 1))
+            setMarker(null)
+          }}
+        />
       )}
       </div>
 

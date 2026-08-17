@@ -137,7 +137,7 @@ independent of `count`.
 
 | Field | Type | Default | Meaning |
 |---|---|---|---|
-| `do` | string | `"strike"` | `"strike"` or `"plant"`. Anything else is treated as a strike. |
+| `do` | string | `"strike"` | `"strike"` or `"plant"`. Any other value is **rejected at load** - see below. |
 | `motion` | string | none, required | A `MOTION_DETAIL` name, the same string an `S1.json` file is named after. |
 | `coin` | int | `-1` | Which coin of that motion. `-1` matches any coin. |
 | `slot` | string | `"next"` | Strike only. `"next"` hands the *i*-th matching action the *i*-th ring slot (deterministic, in JSON order); `"all"` moves every slot; a number is a 0-based slot index. |
@@ -158,6 +158,13 @@ independent of `count`.
 | `windUp` | double | `0` | World units drawn back away from the target before the throw. |
 | `windUpTime` | fraction | `0.3` | How much of the outbound window the draw-back takes. Ignored when `windUp` is `0`. |
 | `face` | bool | `false` | Rotate the instance to lead along its direction of travel. Ignored if `spin` is set. |
+
+`do` is a closed list. A value that isn't `"strike"` or `"plant"` fails the
+whole entry at load with a named error, rather than quietly running as a
+strike the way a typo used to — `"strke"` would load clean and then throw a
+knife nobody had authored. The two kinds read different fields, so the loader
+also checks each action against the kind it named: a `park` on a plant, or a
+strike on a `"world"` entry, are both refused by name.
 
 Every time field on an action (`start`, `arrive`, `returnAt`, `at`) is a
 fraction of the *motion's* duration, exactly like `phases[].start` in a coin
@@ -496,8 +503,9 @@ VS Code (and anything else that reads `$schema`) then autocompletes every
 field on this page, shows the description as you type, and underlines the
 mistakes *before* you launch the game. It catches every rule the loader
 rejects an entry for: an entry with neither `folder` nor `prefab`, an
-unknown `anchor` or `park` mode, an action with no `motion`, `park` and
-`returnAt` set together, actions on a `target` entry, a `slot` that is not
+unknown `anchor`, `do` or `park` mode, an action with no `motion`, `park` and
+`returnAt` set together, a strike on a `world` entry, actions on a `target`
+entry, a `slot` that is not
 `all`/`next`/a number. It also catches the ones the loader can only shrug at:
 a misspelled field name, and a fraction written as `40` instead of `0.4`.
 

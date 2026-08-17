@@ -90,6 +90,17 @@ export interface Candidate {
   path: string
 }
 
+/** A candidate the path already settled the kind of: the only kind that can be opened directly. */
+export type Known = Candidate & { mode: Mode }
+
+/**
+ * Only a single directly-picked folder can have an unsettled kind, so anything found by descending
+ * is already known. Filtering says that in a way the types carry, rather than asserting it.
+ */
+export function known(candidates: Candidate[]): Known[] {
+  return candidates.filter((c): c is Known => c.mode !== null)
+}
+
 /**
  * The three names the plugin refuses to treat as characters under custom_motions: they hold
  * bundles for the dashboard, the screen border and buff effects (Motions.cs:82,97,113). Substring
