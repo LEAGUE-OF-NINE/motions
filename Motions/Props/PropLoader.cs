@@ -103,10 +103,10 @@ public static class PropLoader
                 return null;
             }
 
-            var obj = new GameObject($"Prop_{entry.folder}");
-            renderer = obj.AddComponent<SpriteRenderer>();
+            var instance = new GameObject($"Prop_{entry.folder}");
+            renderer = instance.AddComponent<SpriteRenderer>();
             renderer.sprite = art.Sprites[0];
-            return obj;
+            return instance;
         }
 
         var prefab = CharVFXParse.GetPrefab(appearanceID, entry.prefab);

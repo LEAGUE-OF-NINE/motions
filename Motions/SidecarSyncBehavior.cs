@@ -120,7 +120,7 @@ public class SidecarSyncBehavior : MonoBehaviour
     private void PositionVfx(VfxCue cue)
     {
         if (cue.ActiveInstance == null) return;
-        var t = cue.ActiveInstance.transform;
+        var instance = cue.ActiveInstance.transform;
         var offset = new Vector3(cue.OffsetX, cue.OffsetY, cue.OffsetZ);
 
         switch (cue.SpawnTarget)
@@ -129,24 +129,24 @@ public class SidecarSyncBehavior : MonoBehaviour
                 var enemyTransform = GetFirstTargetTransform();
                 if (enemyTransform != null)
                 {
-                    t.SetParent(enemyTransform);
-                    t.localPosition = offset;
+                    instance.SetParent(enemyTransform);
+                    instance.localPosition = offset;
                 }
                 break;
 
             case VfxSpawnTarget.Center:
-                t.SetParent(null);
+                instance.SetParent(null);
                 var selfPos = SandboxRenderer.transform.position;
                 var targetPos = selfPos;
                 var target = GetFirstTargetTransform();
                 if (target != null) targetPos = target.position;
-                t.position = (selfPos + targetPos) / 2f + offset;
+                instance.position = (selfPos + targetPos) / 2f + offset;
                 break;
 
             case VfxSpawnTarget.Self:
             default:
-                t.SetParent(SandboxRenderer.transform);
-                t.localPosition = offset;
+                instance.SetParent(SandboxRenderer.transform);
+                instance.localPosition = offset;
                 break;
         }
     }
@@ -216,24 +216,24 @@ public class SidecarSyncBehavior : MonoBehaviour
     /// <summary>Fires each sound cue as its time is reached, and stops the ones that have run their
     /// authored duration. Cues are structs, so each edit is written back into the list.</summary>
     [HideFromIl2Cpp]
-    private void TickSoundCues(float currentTime)
+    private void TickSoundCues(float t)
     {
         for (int i = 0; i < SoundCues.Count; i++)
         {
             var cue = SoundCues[i];
 
-            if (!cue.Triggered && currentTime >= cue.StartTime)
+            if (!cue.Triggered && t >= cue.StartTime)
             {
                 cue.Triggered = true;
                 float sfxVol = SoundManager.Instance != null ? SoundManager.Instance.Volume_SFX : 1f;
                 cue.ActiveChannel = FMODAudioUtil.PlaySound(cue.WavData, cue.ClipIn, sfxVol);
                 SoundCues[i] = cue;
-                Logger.LogInfo($"[SidecarSync] Fired FMOD sound cue at t={currentTime:F3}s (clipIn={cue.ClipIn:F3}s, dur={cue.Duration:F3}s)");
+                Logger.LogInfo($"[SidecarSync] Fired FMOD sound cue at t={t:F3}s (clipIn={cue.ClipIn:F3}s, dur={cue.Duration:F3}s)");
             }
 
             // Duration 0 means "play the whole clip", so only a cue that named one is cut short.
             if (cue.Triggered && cue.Duration > 0f && cue.ActiveChannel.hasHandle()
-                && currentTime >= cue.StartTime + cue.Duration)
+                && t >= cue.StartTime + cue.Duration)
             {
                 cue.ActiveChannel.stop();
                 cue.ActiveChannel = default;
@@ -246,13 +246,13 @@ public class SidecarSyncBehavior : MonoBehaviour
     /// duration. The instance is usually pre-built and inactive; a cue that has none builds one.
     /// </summary>
     [HideFromIl2Cpp]
-    private void TickVfxCues(float currentTime)
+    private void TickVfxCues(float t)
     {
         for (int i = 0; i < VfxCues.Count; i++)
         {
             var cue = VfxCues[i];
 
-            if (!cue.Triggered && currentTime >= cue.StartTime)
+            if (!cue.Triggered && t >= cue.StartTime)
             {
                 cue.Triggered = true;
                 if (cue.ActiveInstance != null)
@@ -269,7 +269,7 @@ public class SidecarSyncBehavior : MonoBehaviour
             }
 
             if (cue.Triggered && cue.ActiveInstance != null && cue.Duration > 0f
-                && currentTime >= cue.StartTime + cue.Duration)
+                && t >= cue.StartTime + cue.Duration)
             {
                 UnityEngine.Object.Destroy(cue.ActiveInstance);
                 cue.ActiveInstance = null;

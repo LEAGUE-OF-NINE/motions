@@ -43,7 +43,7 @@ namespace Motions
             }
         }
 
-        private static bool SatisfiesVFXRequirement(int stackThreshold, int turnThreshold, BUFF_UNIQUE_KEYWORD keyword, BattleUnitModel unit)
+        private static bool SatisfiesVFXRequirement(int stackThres, int turnThres, BUFF_UNIQUE_KEYWORD keyword, BattleUnitModel unit)
         {
             var buffInfo = unit._buffDetail.GetBuffInfoAll(0);
             foreach (BuffInfo buff in buffInfo)
@@ -51,7 +51,7 @@ namespace Motions
                 if (!buff.IsKeyword(keyword))
                     continue;
 
-                if (buff._stack < stackThreshold || buff._turn < turnThreshold)
+                if (buff._stack < stackThres || buff._turn < turnThres)
                     return false;
 
                 return true;
@@ -81,7 +81,7 @@ namespace Motions
                 return cached;
 
             GameObject prefab = null;
-            var bundles = MotionData.GetAssetBundlesFromAppearance(appearanceID);
+            var bundles = MotionData.GetBundlesForAppearance(appearanceID);
             if (bundles != null)
             {
                 foreach (var bundle in bundles)
@@ -148,9 +148,9 @@ namespace Motions
             if (characterVFX == null)
                 return;
 
-            var allAttr = characterVFX.allVFX;
+            var allVFX = characterVFX.allVFX;
 
-            foreach (var keywordGroup in allAttr.GroupBy(x => x.keyword))
+            foreach (var keywordGroup in allVFX.GroupBy(x => x.keyword))
             {
                 BUFF_UNIQUE_KEYWORD keyword = CustomBuffs.ParseBuffUniqueKeyword(keywordGroup.Key);
                 CharVFX selected = null;
@@ -218,29 +218,29 @@ namespace Motions
 
                 bool isFront = prefab.name.EndsWith("_Front", StringComparison.OrdinalIgnoreCase);
 
-                GameObject charVfxInstance = UnityEngine.Object.Instantiate(prefab);
+                GameObject instance = UnityEngine.Object.Instantiate(prefab);
 
-                charVfxInstance.transform.SetParent(
+                instance.transform.SetParent(
                     isFront
                         ? __instance.viewEffectRootDirection
                         : __instance.viewEffectRootBack);
 
-                charVfxInstance.transform.localPosition = Vector3.zero;
-                charVfxInstance.transform.localRotation = Quaternion.identity;
-                charVfxInstance.transform.localScale =
+                instance.transform.localPosition = Vector3.zero;
+                instance.transform.localRotation = Quaternion.identity;
+                instance.transform.localScale =
                     Vector3.one * __instance.Appearance.charInfo.transform_Height.localPosition.y * 0.25f;
 
                 var ability = new Effect_Ability
                 {
                     keyword = keyword,
-                    effectObj = charVfxInstance,
+                    effectObj = instance,
                     IsSetOverrideDie = false
                 };
 
                 __instance._effects_ability.Add(keyword, (Effect_Label)ability);
 
-                charVfxInstance.SetActive(false);
-                charVfxInstance.SetActive(true);
+                instance.SetActive(false);
+                instance.SetActive(true);
             }
         }
     }

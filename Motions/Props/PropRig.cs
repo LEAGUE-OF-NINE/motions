@@ -342,7 +342,7 @@ public class PropRig : MonoBehaviour
         // A slot whose GameObject was destroyed from outside - the effect root it hangs off being
         // rebuilt mid-battle - still counts towards the target, so without this the entry sits one
         // instance short for the rest of the battle. PropWorld.Tick self-heals too.
-        live.Slots.RemoveAll(s => s.Obj == null);
+        live.Slots.RemoveAll(slot => slot.Obj == null);
 
         // A consume: "gate" instance comes back when, and only when, the gate's answer moves. On a
         // keyword entry that is the stack changing; on a fixed-count entry with no keyword it never

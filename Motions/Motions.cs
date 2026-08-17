@@ -58,29 +58,29 @@ public class Motions
             return;
         }
 
-        foreach (var modPath in Directory.GetDirectories(Plugin.modsPath.FullPath))
+        foreach (var modDir in Directory.GetDirectories(Plugin.modsPath.FullPath))
         {
-            string modName = Path.GetFileName(modPath);
+            string modName = Path.GetFileName(modDir);
             if (modName.StartsWith("DISABLED_") || modName.StartsWith("FULLDISABLED_"))
             {
-                Logger.LogInfo($"Skipping {modPath} due to it being disabled.");
+                Logger.LogInfo($"Skipping {modDir} due to it being disabled.");
                 continue;
             }
 
-            LoadMod(modPath);
+            LoadMod(modDir);
         }
     }
 
     /// <summary>Everything one enabled mod folder contributes: its brand-new appearances, then its
     /// overrides of existing ones.</summary>
-    static void LoadMod(string modPath)
+    static void LoadMod(string modDir)
     {
         // Registered BEFORE custom_motions: a mod may define only motion_appearances/, and
         // returning early on a missing custom_motions/ would skip it - which surfaces much later
         // and far away as "No registered base".
-        RegisterNewAppearances(Path.Combine(modPath, "motion_appearances"));
+        RegisterNewAppearances(Path.Combine(modDir, "motion_appearances"));
 
-        var motionsRoot = Path.Combine(modPath, "custom_motions");
+        var motionsRoot = Path.Combine(modDir, "custom_motions");
         if (!Directory.Exists(motionsRoot)) return;
 
         foreach (var charDir in Directory.GetDirectories(motionsRoot))
@@ -131,13 +131,13 @@ public class Motions
     {
         if (charDir.Contains("DASHBOARD"))
         {
-            LoadNamedBundles(charDir, MotionData.dashboardAssets, "dashboard", trimExtension: false);
+            LoadNamedBundles(charDir, MotionData.DashboardAssets, "dashboard", trimExtension: false);
             return true;
         }
 
         if (charDir.Contains("CUSTOMSCREEN"))
         {
-            LoadNamedBundles(charDir, MotionData.screenBorderAssets, "screeneffect", trimExtension: true);
+            LoadNamedBundles(charDir, MotionData.ScreenBorderAssets, "screeneffect", trimExtension: true);
             return true;
         }
 
@@ -182,15 +182,15 @@ public class Motions
     /// a list rather than colliding the way the dashboard and screen stores do.</summary>
     static void LoadBuffBundles(string charDir)
     {
-        string buffId = Path.GetFileName(charDir).Remove(0, "MOTIONBUFF_".Length);
-        Logger.LogWarning($"Discovered directory for Buff: [{buffId}] at path: {charDir}");
+        string buffID = Path.GetFileName(charDir).Remove(0, "MOTIONBUFF_".Length);
+        Logger.LogWarning($"Discovered directory for Buff: [{buffID}] at path: {charDir}");
 
-        BUFF_UNIQUE_KEYWORD keyword = CustomBuffs.ParseBuffUniqueKeyword(buffId);
-        Logger.LogInfo($"Resolved '{buffId}' -> {(int)keyword}");
+        BUFF_UNIQUE_KEYWORD keyword = CustomBuffs.ParseBuffUniqueKeyword(buffID);
+        Logger.LogInfo($"Resolved '{buffID}' -> {(int)keyword}");
 
         foreach (var bundlePath in Directory.GetFiles(charDir, "*.bundle", SearchOption.AllDirectories))
         {
-            Logger.LogInfo($"Loading bundle for {buffId}: {bundlePath}");
+            Logger.LogInfo($"Loading bundle for {buffID}: {bundlePath}");
 
             var bundle = LoadBundle(bundlePath);
             if (bundle == null) continue;
@@ -200,7 +200,7 @@ public class Motions
 
             MotionData.LoadedBuffAssets[keyword].Add(bundle);
 
-            Logger.LogWarning($"Loaded motion bundle {bundle.name} for keyword {(int)keyword} ({buffId})");
+            Logger.LogWarning($"Loaded motion bundle {bundle.name} for keyword {(int)keyword} ({buffID})");
         }
     }
 
@@ -230,7 +230,7 @@ public class Motions
             if (bundle != null)
             {
                 if (!MotionData.LoadedAssets.ContainsKey(appearanceID))
-                    MotionData.LoadedAssets.Add(appearanceID, new System.Collections.Generic.List<UnityEngine.AssetBundle>());
+                    MotionData.LoadedAssets.Add(appearanceID, new List<AssetBundle>());
 
                 MotionData.LoadedAssets[appearanceID].Add(bundle);
                 Logger.LogWarning($"Loaded motion bundle {bundle.name} for {appearanceID}!");
@@ -252,7 +252,7 @@ public class Motions
             if (File.Exists(jsonPath))
             {
                 if (!MotionData.CustomMotionDefinitions.ContainsKey(appearanceID))
-                    MotionData.CustomMotionDefinitions.Add(appearanceID, new System.Collections.Generic.Dictionary<MOTION_DETAIL, string>());
+                    MotionData.CustomMotionDefinitions.Add(appearanceID, new Dictionary<MOTION_DETAIL, string>());
 
                 if (!MotionData.CustomMotionDefinitions[appearanceID].ContainsKey(detail))
                 {
@@ -328,7 +328,7 @@ public class Motions
         string appearanceID = unitView?._unitModel?.GetAppearanceID() ?? __instance.charInfo.appearanceID;
         Logger.LogInfo($"CharacterAppearance.Initialize called for: {appearanceID} (Source: {(unitView != null ? "Model" : "CharInfo")})");
         CueExtractor.EagerCacheBuffEffects();
-        CueExtractor.EagerCacheDashEffects();
+        CueExtractor.EagerCacheDashboardEffects();
         bool hasCustomJSON = MotionData.HasDefinition(appearanceID);
         bool hasCustomBundle = MotionData.HasBundle(appearanceID);
         bool hasSpriteMotion = MotionData.HasSpriteMotion(appearanceID);
@@ -347,14 +347,14 @@ public class Motions
             }
 
             // Collect all original VFX tracks across all motions for cross-motion referencing
-            var allVfxTracks = new System.Collections.Generic.List<TrackAsset>();
+            var allVfxTracks = new List<TrackAsset>();
             foreach (var detailObj in Enum.GetValues(typeof(MOTION_DETAIL)))
             {
                 MOTION_DETAIL detail = (MOTION_DETAIL)detailObj;
                 var motion = __instance.GetMotion(detail);
                 if (motion?.timelineAssets != null)
-                    foreach (var tl in motion.timelineAssets)
-                        foreach (var track in tl.flattenedTracks)
+                    foreach (var timeline in motion.timelineAssets)
+                        foreach (var track in timeline.flattenedTracks)
                             foreach (var clip in track.clips)
                                 if (clip.asset != null && clip.asset.GetIl2CppType().Name.Contains("EffectActivate"))
                                 { allVfxTracks.Add(track); break; }
@@ -363,11 +363,11 @@ public class Motions
             Logger.LogInfo($"[VFX Tracks] {appearanceID} - {allVfxTracks.Count} tracks:");
             for (int i = 0; i < allVfxTracks.Count; i++)
             {
-                var t = allVfxTracks[i];
-                var clipNames = new System.Collections.Generic.List<string>();
-                foreach (var c in t.clips)
-                    clipNames.Add($"{c.displayName}@{c.start:F2}s");
-                Logger.LogInfo($"  {i + 1}: {t.name} [{string.Join(", ", clipNames)}]");
+                var track = allVfxTracks[i];
+                var clipNames = new List<string>();
+                foreach (var clip in track.clips)
+                    clipNames.Add($"{clip.displayName}@{clip.start:F2}s");
+                Logger.LogInfo($"  {i + 1}: {track.name} [{string.Join(", ", clipNames)}]");
             }
 
             foreach (var detailObj in Enum.GetValues(typeof(MOTION_DETAIL)))
@@ -391,6 +391,11 @@ public class Motions
 
     // ---- ChangeMotion hooks -----------------------------------------------
 
+    /// <summary>Everywhere else in this project a MOTION_DETAIL parameter is called <c>detail</c>.
+    /// Not here, and not in any other patch method: Harmony binds an original method's arguments by
+    /// parameter NAME, so these have to keep the game's spelling - typos and casing included
+    /// (<c>motiondetail</c>, <c>triggerdData</c>, <c>stageinfo</c>). Renaming one silently stops the
+    /// argument being injected.</summary>
     [HarmonyPatch(typeof(SD.CharacterAppearance), nameof(SD.CharacterAppearance.ChangeMotion))]
     [HarmonyPostfix]
     private static void PostChangeMotion(SD.CharacterAppearance __instance, MOTION_DETAIL motiondetail, int index)

@@ -60,67 +60,68 @@ public static class TimelineBuilder
 
     public static void AddHitChecker(TrackAsset track, double time, bool isCanNextMotion, float isNextMotionCoinDelay)
     {
-        var marker = track.CreateMarker(Il2CppType.Of<CharacterAppearanceMarker_HitCheaker>(), time);
-        var hitChecker = marker.Cast<CharacterAppearanceMarker_HitCheaker>();
-        hitChecker.hitCheakerInfo = new HitCheakerInfo
+        var marker = track.CreateMarker(Il2CppType.Of<CharacterAppearanceMarker_HitCheaker>(), time)
+                          .Cast<CharacterAppearanceMarker_HitCheaker>();
+        marker.hitCheakerInfo = new HitCheakerInfo
         {
             isCanNextMotion = isCanNextMotion,
             isNextMotionCoinDelay = isNextMotionCoinDelay
         };
     }
 
-    public static void SetupAppearanceTrackMarkers(TrackAsset track, CoinData data)
+    public static void SetupAppearanceTrackMarkers(TrackAsset track, CoinData coinData)
     {
-        double duration = data.totalDuration;
-        if (data != null && data.hitCheckers != null && data.hitCheckers.Length > 0)
+        double totalDuration = coinData.totalDuration;
+        if (coinData.hitCheckers != null && coinData.hitCheckers.Length > 0)
         {
-            for (int i = 0; i < data.hitCheckers.Length; i++)
+            for (int i = 0; i < coinData.hitCheckers.Length; i++)
             {
                 // time is a fraction of the coin, and nothing validates the JSON: a typo'd 55555 (or a
                 // negative) puts the marker outside the fixed-length timeline, where it never fires and
                 // the coin never hands off. Clamped rather than skipped - a hand-off late is recoverable.
-                double at = duration * Math.Clamp(data.hitCheckers[i].time, 0.0, 1.0);
-                AddHitChecker(track, at, false, data.hitCheckers[i].isNextMotionCoinDelay);
+                double at = totalDuration * Math.Clamp(coinData.hitCheckers[i].time, 0.0, 1.0);
+                AddHitChecker(track, at, false, coinData.hitCheckers[i].isNextMotionCoinDelay);
             }
         }
         else
         {
             // Default behavior if no hitcheckers are defined in JSON
-            AddHitChecker(track, duration * 0.15, false, 0.0f);
+            AddHitChecker(track, totalDuration * 0.15, false, 0.0f);
         }
     }
 
-    public static void SetupCameraShakeMarkers(TrackAsset track, CoinData data)
+    public static void SetupCameraShakeMarkers(TrackAsset track, CoinData coinData)
     {
-        if (data == null || data.shakes == null)
+        if (coinData == null || coinData.shakes == null)
             return;
 
-        double duration = data.totalDuration;
-        foreach (var shake in data.shakes)
+        double totalDuration = coinData.totalDuration;
+        foreach (var shake in coinData.shakes)
         {
-            double time = shake.start * duration;
-            var marker = track.CreateMarker(Il2CppType.Of<CharacterAppearanceMarker_CameraShaker>(), time);
-            var shaker = marker.Cast<CharacterAppearanceMarker_CameraShaker>();
-            shaker.duration = (float)shake.duration;
-            shaker.strength = shake.strength;
-            shaker.vibrato = shake.vibrato;
-            shaker.randomness = shake.randomness;
-            shaker.fadeOut = shake.fadeOut;
+            double time = shake.start * totalDuration;
+            var marker = track.CreateMarker(Il2CppType.Of<CharacterAppearanceMarker_CameraShaker>(), time)
+                              .Cast<CharacterAppearanceMarker_CameraShaker>();
+            marker.duration = (float)shake.duration;
+            marker.strength = shake.strength;
+            marker.vibrato = shake.vibrato;
+            marker.randomness = shake.randomness;
+            marker.fadeOut = shake.fadeOut;
         }
     }
 
-    public static void SetupBattleCamZoomFromJson(TrackAsset track, CoinData data)
+    public static void SetupBattleCamZoomFromJson(TrackAsset track, CoinData coinData)
     {
-        if (data == null || data.zooms == null)
+        if (coinData == null || coinData.zooms == null)
             return;
 
-        foreach (var zoom in data.zooms)
+        double totalDuration = coinData.totalDuration;
+        foreach (var zoom in coinData.zooms)
         {
-            var timelineClip = track.CreateClip(Il2CppType.Of<OnBattleCamZoomClip>());
-            timelineClip.start = zoom.start * data.totalDuration;
-            timelineClip.duration = zoom.duration;
+            var clip = track.CreateClip(Il2CppType.Of<OnBattleCamZoomClip>());
+            clip.start = zoom.start * totalDuration;
+            clip.duration = zoom.duration;
 
-            var asset = timelineClip.asset.TryCast<OnBattleCamZoomClip>();
+            var asset = clip.asset.TryCast<OnBattleCamZoomClip>();
             if (asset != null && asset.template != null)
             {
                 var info = new OnBattleCamZoomInfo();
@@ -147,18 +148,19 @@ public static class TimelineBuilder
         }
     }
 
-    public static void SetupBattleCamRotateFromJson(TrackAsset track, CoinData data)
+    public static void SetupBattleCamRotateFromJson(TrackAsset track, CoinData coinData)
     {
-        if (data == null || data.rotates == null)
+        if (coinData == null || coinData.rotates == null)
             return;
 
-        foreach (var rotate in data.rotates)
+        double totalDuration = coinData.totalDuration;
+        foreach (var rotate in coinData.rotates)
         {
-            var timelineClip = track.CreateClip(Il2CppType.Of<OnBattleCamRotateClip>());
-            timelineClip.start = rotate.start * data.totalDuration;
-            timelineClip.duration = rotate.duration;
+            var clip = track.CreateClip(Il2CppType.Of<OnBattleCamRotateClip>());
+            clip.start = rotate.start * totalDuration;
+            clip.duration = rotate.duration;
 
-            var asset = timelineClip.asset.TryCast<OnBattleCamRotateClip>();
+            var asset = clip.asset.TryCast<OnBattleCamRotateClip>();
             if (asset != null && asset.template != null)
             {
                 var info = new OnBattleCamRotateInfo();
@@ -231,17 +233,18 @@ public static class TimelineBuilder
     /// <summary>Writes one coin's phases onto <paramref name="track"/> as game markers. A phase with
     /// several steps repeats its marker evenly across the phase's slice of the coin, so one authored
     /// phase can be a multi-hit flurry.</summary>
-    public static void SetupSkillFromJson(TrackAsset track, CoinData data)
+    public static void SetupSkillFromJson(TrackAsset track, CoinData coinData)
     {
-        if (data?.phases == null || data.phases.Length == 0) return;
+        if (coinData?.phases == null || coinData.phases.Length == 0) return;
 
-        foreach (var phase in data.phases)
+        double totalDuration = coinData.totalDuration;
+        foreach (var phase in coinData.phases)
         {
             for (int i = 0; i < phase.steps; i++)
             {
                 // Single-step phases fire at `start`; the rest spread across start..end inclusive.
                 double t = phase.steps == 1 ? 0 : i / (double)(phase.steps - 1);
-                double time = data.totalDuration * (phase.start + (phase.end - phase.start) * t);
+                double time = totalDuration * (phase.start + (phase.end - phase.start) * t);
 
                 AddPhaseMarker(track, phase, time);
             }
@@ -262,52 +265,52 @@ public static class TimelineBuilder
         {
             case "Relative":
             {
-                var tween = track.CreateMarker(Il2CppType.Of<SkillGiveTiming_TweenMove_Relative>(), time)
-                                 .Cast<SkillGiveTiming_TweenMove_Relative>();
-                tween.moveInfo = MoveRelative(phase, movePos);
+                var marker = track.CreateMarker(Il2CppType.Of<SkillGiveTiming_TweenMove_Relative>(), time)
+                                  .Cast<SkillGiveTiming_TweenMove_Relative>();
+                marker.moveInfo = MoveRelative(phase, movePos);
                 break;
             }
 
             // Same marker type as Relative, named so the enemy-moving patch can pick it out.
             case "MoveEnemy":
             {
-                var tween = track.CreateMarker(Il2CppType.Of<SkillGiveTiming_TweenMove_Relative>(), time)
-                                 .Cast<SkillGiveTiming_TweenMove_Relative>();
-                tween.name = "MoveEnemy";
-                tween.moveInfo = MoveRelative(phase, movePos);
+                var marker = track.CreateMarker(Il2CppType.Of<SkillGiveTiming_TweenMove_Relative>(), time)
+                                  .Cast<SkillGiveTiming_TweenMove_Relative>();
+                marker.name = "MoveEnemy";
+                marker.moveInfo = MoveRelative(phase, movePos);
                 break;
             }
 
             case "ToTarget":
             {
-                var tween = track.CreateMarker(Il2CppType.Of<SkillGiveTiming_TweenMove_ToTarget>(), time)
-                                 .Cast<SkillGiveTiming_TweenMove_ToTarget>();
-                tween.moveInfo = MoveToTarget(phase);
+                var marker = track.CreateMarker(Il2CppType.Of<SkillGiveTiming_TweenMove_ToTarget>(), time)
+                                  .Cast<SkillGiveTiming_TweenMove_ToTarget>();
+                marker.moveInfo = MoveToTarget(phase);
                 break;
             }
 
             case "ToTargetWide":
             {
-                var tween = track.CreateMarker(Il2CppType.Of<SkillGiveTiming_TweenMove_ToTarget_Wide>(), time)
-                                 .Cast<SkillGiveTiming_TweenMove_ToTarget_Wide>();
-                tween.moveInfo = MoveToTarget(phase);
-                tween.moveInfo_wide = new TweenMoveInfo_ToTarget_Wide { arriveRadius_Vector = movePos };
+                var marker = track.CreateMarker(Il2CppType.Of<SkillGiveTiming_TweenMove_ToTarget_Wide>(), time)
+                                  .Cast<SkillGiveTiming_TweenMove_ToTarget_Wide>();
+                marker.moveInfo = MoveToTarget(phase);
+                marker.moveInfo_wide = new TweenMoveInfo_ToTarget_Wide { arriveRadius_Vector = movePos };
                 break;
             }
 
             case "GiveDamage":
             {
-                var damage = track.CreateMarker(Il2CppType.Of<SkillGiveTiming_GiveDamage>(), time)
+                var marker = track.CreateMarker(Il2CppType.Of<SkillGiveTiming_GiveDamage>(), time)
                                   .Cast<SkillGiveTiming_GiveDamage>();
 
-                damage.ratios = phase.damageRatio > 0 ? phase.damageRatio : 1f;
-                damage.info = new OnGiveDamageInfo
+                marker.ratios = phase.damageRatio > 0 ? phase.damageRatio : 1f;
+                marker.info = new OnGiveDamageInfo
                 {
                     multiHit = phase.damage != null ? phase.damage.multiHit : 1,
                     isUpAttack = phase.damage != null && phase.damage.isUpAttack,
                     multiHitDuration = phase.damage != null ? phase.damage.multiHitDuration : 0f
                 };
-                damage.sturnInfo = Sturn(phase.sturn);
+                marker.sturnInfo = Sturn(phase.sturn);
                 break;
             }
         }
@@ -372,22 +375,22 @@ public static class TimelineBuilder
         int variantIndex = 0,
         double?[] coinDurations = null)
     {
-        SkillData data = LoadSkillData(jsonPath);
+        SkillData skillData = LoadSkillData(jsonPath);
 
         // No JSON, or a JSON carrying only settings: fall back to a dummy coin, which both clears
         // the game's default logic and keeps the bundle's own timeline injectable.
-        if (data?.coins == null || data.coins.Length == 0)
-            data = OneFallbackCoin(data, bundleTimeline, coinDurations);
+        if (skillData?.coins == null || skillData.coins.Length == 0)
+            skillData = OneFallbackCoin(skillData, bundleTimeline, coinDurations);
 
         var timelines = new List<TimelineAsset>();
 
-        for (int coinIdx = 0; coinIdx < data.coins.Length; coinIdx++)
+        for (int coinIndex = 0; coinIndex < skillData.coins.Length; coinIndex++)
         {
-            string name = $"{NamePrefix}{timelineName}_Var{variantIndex}_Coin_{coinIdx}";
-            double sourceDuration = SourceDuration(data.coins[coinIdx], bundleTimeline,
-                                                   coinDurations, coinIdx);
+            string name = $"{NamePrefix}{timelineName}_Var{variantIndex}_Coin_{coinIndex}";
+            double sourceDuration = SourceDuration(skillData.coins[coinIndex], bundleTimeline,
+                                                   coinDurations, coinIndex);
 
-            timelines.Add(BuildCoinTimeline(name, data.coins[coinIdx], sourceDuration,
+            timelines.Add(BuildCoinTimeline(name, skillData.coins[coinIndex], sourceDuration,
                                             bundleTimeline, originalVfxTracks));
         }
 
@@ -396,14 +399,14 @@ public static class TimelineBuilder
 
     /// <summary>The stand-in for a character with no skill JSON: one coin, as long as whatever is
     /// actually going to play.</summary>
-    private static SkillData OneFallbackCoin(SkillData data, TimelineAsset bundleTimeline,
+    private static SkillData OneFallbackCoin(SkillData skillData, TimelineAsset bundleTimeline,
                                              double?[] coinDurations)
     {
         // The common case for a sprite-only mod: PNGs and no S1.json at all.
         bool fromSpriteMotion = coinDurations != null && coinDurations.Length > 0
                                 && coinDurations[0].HasValue;
 
-        double fallback = fromSpriteMotion ? coinDurations[0].Value
+        double totalDuration = fromSpriteMotion ? coinDurations[0].Value
             : bundleTimeline != null ? bundleTimeline.duration
             : 1.0;
 
@@ -417,27 +420,27 @@ public static class TimelineBuilder
             ? new HitCheckerData[] { new HitCheckerData { time = 1.0, isNextMotionCoinDelay = 0f } }
             : new HitCheckerData[0];
 
-        data ??= new SkillData();
-        data.coins = new CoinData[]
+        skillData ??= new SkillData();
+        skillData.coins = new CoinData[]
         {
             new CoinData
             {
-                totalDuration = fallback,
+                totalDuration = totalDuration,
                 phases = new SkillPhase[0],
                 hitCheckers = defaultHitCheckers
             }
         };
 
-        return data;
+        return skillData;
     }
 
     /// <summary>How long the animation itself runs, used only when the JSON declines to say. A
     /// sprite motion is what actually plays, so its length wins over the bundle's.</summary>
     private static double SourceDuration(CoinData coinData, TimelineAsset bundleTimeline,
-                                         double?[] coinDurations, int coinIdx)
+                                         double?[] coinDurations, int coinIndex)
     {
-        if (coinDurations != null && coinIdx < coinDurations.Length && coinDurations[coinIdx].HasValue)
-            return coinDurations[coinIdx].Value;
+        if (coinDurations != null && coinIndex < coinDurations.Length && coinDurations[coinIndex].HasValue)
+            return coinDurations[coinIndex].Value;
 
         return bundleTimeline != null ? bundleTimeline.duration : coinData.totalDuration;
     }
@@ -449,18 +452,18 @@ public static class TimelineBuilder
                                                    TimelineAsset bundleTimeline,
                                                    List<TrackAsset> originalVfxTracks)
     {
-        double targetDuration = coinData.totalDuration > 0 ? coinData.totalDuration : sourceDuration;
-        coinData.totalDuration = targetDuration;
+        double totalDuration = coinData.totalDuration > 0 ? coinData.totalDuration : sourceDuration;
+        coinData.totalDuration = totalDuration;
 
-        TimelineAsset dummyTimeline = ScriptableObject.CreateInstance<TimelineAsset>();
-        dummyTimeline.name = name;
+        TimelineAsset timeline = ScriptableObject.CreateInstance<TimelineAsset>();
+        timeline.name = name;
 
-        AddAnimationTracks(dummyTimeline, bundleTimeline, targetDuration);
+        AddAnimationTracks(timeline, bundleTimeline, totalDuration);
 
-        var appearanceTrack = dummyTimeline.CreateTrack(Il2CppType.Of<CharacterAppearanceTimelineTrack>(), null, "Appearance Track").Cast<TrackAsset>();
-        var skillTrack = dummyTimeline.CreateTrack(Il2CppType.Of<SkillGiveTimingTrack>(), null, "Skill Timing Track").Cast<TrackAsset>();
-        var onBattleCamZoomTrack = dummyTimeline.CreateTrack(Il2CppType.Of<OnBattleCamZoomTrack_Transform>(), null, "On Battle Cam Zoom Track").Cast<TrackAsset>();
-        var onBattleCamRotateTrack = dummyTimeline.CreateTrack(Il2CppType.Of<OnBattleCamRotateTrack>(), null, "On Battle Cam Rotate Track").Cast<TrackAsset>();
+        var appearanceTrack = timeline.CreateTrack(Il2CppType.Of<CharacterAppearanceTimelineTrack>(), null, "Appearance Track").Cast<TrackAsset>();
+        var skillTrack = timeline.CreateTrack(Il2CppType.Of<SkillGiveTimingTrack>(), null, "Skill Timing Track").Cast<TrackAsset>();
+        var onBattleCamZoomTrack = timeline.CreateTrack(Il2CppType.Of<OnBattleCamZoomTrack_Transform>(), null, "On Battle Cam Zoom Track").Cast<TrackAsset>();
+        var onBattleCamRotateTrack = timeline.CreateTrack(Il2CppType.Of<OnBattleCamRotateTrack>(), null, "On Battle Cam Rotate Track").Cast<TrackAsset>();
 
         SetupAppearanceTrackMarkers(appearanceTrack, coinData);
         SetupSkillFromJson(skillTrack, coinData);
@@ -470,21 +473,21 @@ public static class TimelineBuilder
         // Native camera shake markers: CharacterApperacneResiver handles these automatically.
         SetupCameraShakeMarkers(appearanceTrack, coinData);
 
-        CopyVfxTracks(dummyTimeline, coinData, originalVfxTracks);
+        CopyVfxTracks(timeline, coinData, originalVfxTracks);
 
         // Without this the timeline's length collapses to its longest clip, which cuts short any
         // motion whose clips don't span the whole duration (parries, guard).
-        dummyTimeline.durationMode = TimelineAsset.DurationMode.FixedLength;
-        dummyTimeline.fixedDuration = targetDuration;
+        timeline.durationMode = TimelineAsset.DurationMode.FixedLength;
+        timeline.fixedDuration = totalDuration;
 
-        return dummyTimeline;
+        return timeline;
     }
 
     /// <summary>Mirrors the bundle's animation tracks onto the new timeline, clip timings and all.
     /// With no bundle - a sprite-only motion - one empty clip spanning the coin stands in, so the
     /// director still has something to run its clock against.</summary>
     private static void AddAnimationTracks(TimelineAsset into, TimelineAsset bundleTimeline,
-                                           double targetDuration)
+                                           double totalDuration)
     {
         if (bundleTimeline == null)
         {
@@ -492,11 +495,11 @@ public static class TimelineBuilder
                                 .Cast<AnimationTrack>();
             var soloClip = soloTrack.CreateClip<AnimationPlayableAsset>();
             soloClip.start = 0.0;
-            soloClip.duration = targetDuration;
+            soloClip.duration = totalDuration;
             return;
         }
 
-        int animTrackIdx = 0;
+        int animTrackIndex = 0;
 
         foreach (var bundleTrack in bundleTimeline.flattenedTracks)
         {
@@ -506,7 +509,7 @@ public static class TimelineBuilder
             if (!trackType.Contains("AnimationTrack")) continue;
 
             var animTrack = into.CreateTrack(Il2CppType.Of<AnimationTrack>(), null,
-                                             $"Animation Track {animTrackIdx++}")
+                                             $"Animation Track {animTrackIndex++}")
                                 .Cast<AnimationTrack>();
 
             foreach (var bundleClip in bundleTrack.clips)
@@ -526,23 +529,23 @@ public static class TimelineBuilder
     {
         if (coinData.vfx == null || coinData.vfx.Length == 0 || originalVfxTracks == null) return;
 
-        foreach (int idx in coinData.vfx)
+        foreach (int authored in coinData.vfx)
         {
-            int i = idx - 1;
-            if (i < 0 || i >= originalVfxTracks.Count) continue;
+            int index = authored - 1;
+            if (index < 0 || index >= originalVfxTracks.Count) continue;
 
-            var origTrack = originalVfxTracks[i];
-            var newTrack = into.CreateTrack(origTrack.GetIl2CppType(), null, origTrack.name);
+            var originalTrack = originalVfxTracks[index];
+            var track = into.CreateTrack(originalTrack.GetIl2CppType(), null, originalTrack.name);
 
-            foreach (var c in origTrack.clips)
+            foreach (var originalClip in originalTrack.clips)
             {
-                if (c.asset == null) continue;
+                if (originalClip.asset == null) continue;
 
-                var newClip = newTrack.CreateClip(c.asset.GetIl2CppType());
-                newClip.displayName = c.displayName;
-                newClip.start = c.start;
-                newClip.duration = c.duration;
-                newClip.asset = c.asset;
+                var clip = track.CreateClip(originalClip.asset.GetIl2CppType());
+                clip.displayName = originalClip.displayName;
+                clip.start = originalClip.start;
+                clip.duration = originalClip.duration;
+                clip.asset = originalClip.asset;
             }
         }
     }

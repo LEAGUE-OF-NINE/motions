@@ -205,17 +205,17 @@ public static class SpriteMotionSpec
 
         for (int i = 0; i < spec.frames.Count; i++)
         {
-            var f = spec.frames[i];
-            if (f == null || string.IsNullOrEmpty(f.sprite)) { error = $"frame {i} has no sprite"; return null; }
-            if (f.scale <= 0) f.scale = 1.0;
-            if (f.offset == null || f.offset.Length < 2) f.offset = new double[] { 0, 0 };
+            var frame = spec.frames[i];
+            if (frame == null || string.IsNullOrEmpty(frame.sprite)) { error = $"frame {i} has no sprite"; return null; }
+            if (frame.scale <= 0) frame.scale = 1.0;
+            if (frame.offset == null || frame.offset.Length < 2) frame.offset = new double[] { 0, 0 };
         }
 
         // Authoring order should not have to match time order.
-        spec.frames.Sort((x, y) => x.t.CompareTo(y.t));
+        spec.frames.Sort((a, b) => a.t.CompareTo(b.t));
 
         spec.sfx ??= new List<SfxSpec>();
-        spec.sfx.RemoveAll(s => s == null || string.IsNullOrEmpty(s.file));
+        spec.sfx.RemoveAll(sfx => sfx == null || string.IsNullOrEmpty(sfx.file));
 
         return spec;
     }

@@ -15,12 +15,12 @@ public static class MotionData
 {
     // --- Bundles from Dashboard -------------------------------------------
 
-    public static readonly Dictionary<string, AssetBundle> dashboardAssets = new();
-    public static readonly Dictionary<string, GameObject> createdDashboardAssets = new();
+    public static readonly Dictionary<string, AssetBundle> DashboardAssets = new();
+    public static readonly Dictionary<string, GameObject> CreatedDashboardAssets = new();
 
     // --- Bundles from ScreenEffect -------------------------------------------
 
-    public static readonly Dictionary<string,AssetBundle> screenBorderAssets = new();
+    public static readonly Dictionary<string,AssetBundle> ScreenBorderAssets = new();
 
     // --- Bundles from BuffEffect -------------------------------------------
 
@@ -87,14 +87,9 @@ public static class MotionData
 
     // ---- Queries ---------------------------------------------------------
 
-    public static List<AssetBundle> GetAssetBundlesFromAppearance(string appearanceID)
-    {
-        if (LoadedAssets.ContainsKey(appearanceID))
-        {
-            return LoadedAssets[appearanceID];
-        }
-        return null;
-    }
+    /// <summary>Named for the same "...ForAppearance" family as FindTimelineForAppearance.</summary>
+    public static List<AssetBundle> GetBundlesForAppearance(string appearanceID)
+        => LoadedAssets.TryGetValue(appearanceID, out var bundles) ? bundles : null;
 
     public static bool HasDefinition(string appearanceID)
         => CustomMotionDefinitions.ContainsKey(appearanceID);
@@ -129,8 +124,6 @@ public static class MotionData
         motion = null;
         return false;
     }
-
-    public static bool HasBundleBuff(string buffID) => LoadedAssets.ContainsKey(buffID);
 
     public static string GetDefinitionPath(string appearanceID, MOTION_DETAIL detail)
     {
@@ -208,7 +201,7 @@ public static class MotionData
 
     public static GameObject FindPrefabAssetDashboard(string bundleName)
     {
-        if (!dashboardAssets.TryGetValue(bundleName, out var bundle))
+        if (!DashboardAssets.TryGetValue(bundleName, out var bundle))
             return null;
 
             foreach (var assetName in bundle.AllAssetNames())
@@ -340,16 +333,16 @@ public static class MotionData
                 bundle.Unload(false);
             }
         }
-        foreach (var bundle in screenBorderAssets.Values)
+        foreach (var bundle in ScreenBorderAssets.Values)
         {
             if (bundle == null) continue;
-            Logger.LogWarning($"Unloading buff bundle {bundle.name}");
+            Logger.LogWarning($"Unloading screen border bundle {bundle.name}");
             bundle.Unload(false);
         }
-        foreach (var bundle in dashboardAssets.Values)
+        foreach (var bundle in DashboardAssets.Values)
         {
             if (bundle == null) continue;
-            Logger.LogWarning($"Unloading buff bundle {bundle.name}");
+            Logger.LogWarning($"Unloading dashboard bundle {bundle.name}");
             bundle.Unload(false);
         }
         foreach (var motion in SpriteMotions.Values)
@@ -365,9 +358,9 @@ public static class MotionData
         PropWorld.Clear();
         LoadedAssets.Clear();
         ScreenBorderPatches.Unload();
-        screenBorderAssets.Clear();
+        ScreenBorderAssets.Clear();
         LoadedBuffAssets.Clear();
-        dashboardAssets.Clear();
+        DashboardAssets.Clear();
         AppearanceVFXCache.Clear();
         AppearanceVFXPrefabs.Clear();
         CustomMotionDefinitions.Clear();

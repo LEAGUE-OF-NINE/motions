@@ -6,7 +6,9 @@ namespace Motions
 {
     public class DashboardInstantiation : IModularConsequence
     {
-        private static GameObject GetVFX(Transform parent, string prefabName)
+        /// <summary>The instance this slot already carries, or null. Not CharVFXParse.GetVFX, which
+        /// answers a different question about a different thing.</summary>
+        private static GameObject FindExistingInstance(Transform parent, string prefabName)
         {
             for (int i = 0; i < parent.childCount; i++)
             {
@@ -50,14 +52,14 @@ namespace Motions
             {
                 posZ = modular.GetNumFromParamString(circles[7]);
             }
-            if (!MotionData.createdDashboardAssets.TryGetValue(vfxName, out var cachedPrefab))
+            if (!MotionData.CreatedDashboardAssets.TryGetValue(vfxName, out var cachedPrefab))
                 return;
 
             foreach (var unit in targets)
             {
                 var sinActionSlot = SingletonBehavior<BattleUIRoot>.Instance.NewOperationController.GetSinActionSlot(unit.GetSinActionList()[slotNum]);
                 Transform parent = topSlot? sinActionSlot.FirstSinSlot.rect.transform: sinActionSlot.SecondSinSlot.rect.transform;
-                GameObject instance = GetVFX(parent, cachedPrefab.name);
+                GameObject instance = FindExistingInstance(parent, cachedPrefab.name);
 
                 if (instance == null)
                 {

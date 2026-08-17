@@ -11,25 +11,25 @@ namespace Motions
 {
     internal class ScreenBorderPatches
     {
-        public static bool init = false;
-        public static string bundlename = "hi";
-        private static Canvas overlayCanvas;
-        private static Image overlayImage;
-        private static Material loadedMaterial;
+        private const string ScriptPrefix = "Screenborder_";
+
+        /// <summary>The stage script's bundle name, or NoBundle when this stage asked for none.</summary>
+        private const string NoBundle = "hi";
+
+        private static bool _initialized;
+        private static string _bundleName = NoBundle;
+        private static Canvas _overlayCanvas;
+        private static Image _overlayImage;
+        private static Material _loadedMaterial;
 
         [HarmonyPatch(typeof(StageModel), nameof(StageModel.Init))]
         [HarmonyPostfix]
         public static void FindScriptName(StageStaticData stageinfo, StageModel __instance)
         {
-            var scripts = stageinfo.stageScriptList;
-            string bundleName = "hi";
-            foreach (string script in scripts)  
+            foreach (string script in stageinfo.stageScriptList)
             {
-                if (script.StartsWith("Screenborder_", StringComparison.OrdinalIgnoreCase))
-                {
-                    bundleName = script.Remove(0, 13);
-                    bundlename = bundleName;
-                }
+                if (script.StartsWith(ScriptPrefix, StringComparison.OrdinalIgnoreCase))
+                    _bundleName = script.Remove(0, ScriptPrefix.Length);
             }
         }
 
@@ -37,14 +37,14 @@ namespace Motions
         [HarmonyPostfix]
         public static void TriggerScreen(BattleObjectManager __instance)
         {
-            if (MotionData.screenBorderAssets.ContainsKey(bundlename) && init == false)
+            if (MotionData.ScreenBorderAssets.ContainsKey(_bundleName) && !_initialized)
             {
-                AssetBundle bundle = MotionData.screenBorderAssets[bundlename];
+                AssetBundle bundle = MotionData.ScreenBorderAssets[_bundleName];
                 foreach (var assetName in bundle.AllAssetNames())
                 {
                     if (!assetName.EndsWith(".mat", StringComparison.OrdinalIgnoreCase))
                         continue;
-                    loadedMaterial = bundle.LoadAsset<Material>($"{assetName}");
+                    _loadedMaterial = bundle.LoadAsset<Material>($"{assetName}");
                 }
                 CreateOverlayCanvas();
                 SetIntensity(1f);
@@ -74,9 +74,9 @@ namespace Motions
                 GameObject canvasObj = new GameObject("Motions_ScreenBorder");
                 UnityEngine.Object.DontDestroyOnLoad(canvasObj);
 
-                overlayCanvas = canvasObj.AddComponent<Canvas>();
-                overlayCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
-                overlayCanvas.sortingOrder = -1; // Sit behind standard overlay canvasses
+                _overlayCanvas = canvasObj.AddComponent<Canvas>();
+                _overlayCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+                _overlayCanvas.sortingOrder = -1; // Sit behind standard overlay canvasses
 
                 CanvasScaler scaler = canvasObj.AddComponent<CanvasScaler>();
                 scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
@@ -84,23 +84,23 @@ namespace Motions
                 imageObj.transform.SetParent(canvasObj.transform, false);
             }
 
-            overlayImage = imageObj.AddComponent<Image>();
-            overlayImage.material = loadedMaterial;
+            _overlayImage = imageObj.AddComponent<Image>();
+            _overlayImage.material = _loadedMaterial;
 
-            overlayImage.raycastTarget = false; // don't take inputs
+            _overlayImage.raycastTarget = false; // don't take inputs
 
-            RectTransform rect = overlayImage.rectTransform;
+            RectTransform rect = _overlayImage.rectTransform;
             rect.anchorMin = Vector2.zero;
             rect.anchorMax = Vector2.one;
             rect.sizeDelta = Vector2.zero;
 
-            init = true;
+            _initialized = true;
         }
         public static void SetIntensity(float intensity)
         {
-            if (loadedMaterial != null && loadedMaterial.HasFloat("_Intensity"))
+            if (_loadedMaterial != null && _loadedMaterial.HasFloat("_Intensity"))
             {
-                loadedMaterial.SetFloat("_Intensity", intensity);
+                _loadedMaterial.SetFloat("_Intensity", intensity);
             }
         }
 
@@ -108,15 +108,15 @@ namespace Motions
         {
             Logger.LogInfo("Unloading screen border.");
 
-            if (overlayCanvas != null)
+            if (_overlayCanvas != null)
             {
-                UnityEngine.Object.Destroy(overlayCanvas.gameObject);
-                overlayCanvas = null;
+                UnityEngine.Object.Destroy(_overlayCanvas.gameObject);
+                _overlayCanvas = null;
             }
-            init = false;
-            overlayImage = null;
-            loadedMaterial = null;
-            bundlename = "hi";
+            _initialized = false;
+            _overlayImage = null;
+            _loadedMaterial = null;
+            _bundleName = NoBundle;
         }
 
     }

@@ -194,20 +194,20 @@ public static class SpriteMotionLoader
     {
         var cues = new List<SoundCue>();
 
-        foreach (var s in spec.sfx)
+        foreach (var sfx in spec.sfx)
         {
-            string path = Path.Combine(motionDir, s.file);
+            string path = Path.Combine(motionDir, sfx.file);
             if (!File.Exists(path))
             {
-                Logger.LogError($"[SpriteMotion] '{label}' sfx '{s.file}' not found, skipping.");
+                Logger.LogError($"[SpriteMotion] '{label}' sfx '{sfx.file}' not found, skipping.");
                 continue;
             }
 
             cues.Add(new SoundCue
             {
-                StartTime = (float)s.t,
-                ClipIn = (float)s.clipIn,
-                Duration = (float)s.duration,
+                StartTime = (float)sfx.t,
+                ClipIn = (float)sfx.clipIn,
+                Duration = (float)sfx.duration,
                 WavData = File.ReadAllBytes(path),
                 Triggered = false
             });

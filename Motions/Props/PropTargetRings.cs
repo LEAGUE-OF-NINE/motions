@@ -216,14 +216,14 @@ internal sealed class PropTargetRings
         }
 
         // Destroyed from outside - the same self-heal RefreshCounts and PropWorld.Tick do.
-        ring.Instances.RemoveAll(x => x.Obj == null);
+        ring.Instances.RemoveAll(instance => instance.Obj == null);
 
         while (!_broken && ring.Instances.Count < want)
         {
-            var made = Spawn(ring, ring.Instances.Count, want);
-            if (made == null) { _broken = true; break; }
+            var instance = Spawn(ring, ring.Instances.Count, want);
+            if (instance == null) { _broken = true; break; }
 
-            ring.Instances.Add(made);
+            ring.Instances.Add(instance);
         }
     }
 

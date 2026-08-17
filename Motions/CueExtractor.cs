@@ -36,31 +36,31 @@ public static class CueExtractor
         return instance;
     }
 
-    public static void EagerCacheDashEffects()
+    public static void EagerCacheDashboardEffects()
     {
-        foreach (var asset in MotionData.dashboardAssets)
+        foreach (var pair in MotionData.DashboardAssets)
         {
-            string bundleName = asset.Key;
+            string bundleName = pair.Key;
 
-            if (MotionData.createdDashboardAssets.ContainsKey(bundleName))
+            if (MotionData.CreatedDashboardAssets.ContainsKey(bundleName))
                 continue;
 
             Logger.LogInfo($"Caching {bundleName}");
 
-            var obj = MotionData.FindPrefabAssetDashboard(bundleName);
-            if (obj == null)
+            var prefab = MotionData.FindPrefabAssetDashboard(bundleName);
+            if (prefab == null)
             {
                 Logger.LogError($"Couldn't find prefab for {bundleName}");
                 continue;
             }
 
-            var persistentPrefab = UnityEngine.Object.Instantiate(obj);
-            persistentPrefab.name = obj.name;
+            var persistentPrefab = UnityEngine.Object.Instantiate(prefab);
+            persistentPrefab.name = prefab.name;
             persistentPrefab.SetActive(false);
 
             UnityEngine.Object.DontDestroyOnLoad(persistentPrefab);
 
-            MotionData.createdDashboardAssets.Add(bundleName, persistentPrefab);
+            MotionData.CreatedDashboardAssets.Add(bundleName, persistentPrefab);
         }
     }
 
@@ -75,15 +75,15 @@ public static class CueExtractor
 
             Logger.LogInfo($"Caching {keyword} ({(int)keyword})");
 
-            var obj = MotionData.FindPrefabAssetBuff(keyword);
-            if (obj == null)
+            var prefab = MotionData.FindPrefabAssetBuff(keyword);
+            if (prefab == null)
             {
                 Logger.LogError($"Couldn't find prefab for {keyword}");
                 continue;
             }
 
-            var persistentPrefab = UnityEngine.Object.Instantiate(obj);
-            persistentPrefab.name = obj.name;
+            var persistentPrefab = UnityEngine.Object.Instantiate(prefab);
+            persistentPrefab.name = prefab.name;
             persistentPrefab.SetActive(false);
 
             UnityEngine.Object.DontDestroyOnLoad(persistentPrefab);
@@ -120,9 +120,9 @@ public static class CueExtractor
 
     // ---- Cue extraction ---------------------------------------------------
 
-    public static void ExtractSoundCues(TimelineAsset timeline, string appearanceID, MOTION_DETAIL motion, int index)
+    public static void ExtractSoundCues(TimelineAsset timeline, string appearanceID, MOTION_DETAIL detail, int index)
     {
-        var key = MotionKey.Create(appearanceID, motion, index);
+        var key = MotionKey.Create(appearanceID, detail, index);
 
         if (MotionData.SoundCueCache.ContainsKey(key)) return;
 
@@ -155,9 +155,9 @@ public static class CueExtractor
         MotionData.SoundCueCache[key] = cues;
     }
 
-    public static void ExtractVfxCues(TimelineAsset timeline, string appearanceID, MOTION_DETAIL motion, int index)
+    public static void ExtractVfxCues(TimelineAsset timeline, string appearanceID, MOTION_DETAIL detail, int index)
     {
-        var key = MotionKey.Create(appearanceID, motion, index);
+        var key = MotionKey.Create(appearanceID, detail, index);
 
         if (MotionData.VfxCueCache.ContainsKey(key)) return;
 

@@ -94,18 +94,18 @@ public static class AppearanceFactory
         {
             var parts = appearance.Sprenderer_charactermotion_Parts;
             if (parts != null)
-                foreach (var r in parts)
-                    if (r != null) r.enabled = false;
+                foreach (var renderer in parts)
+                    if (renderer != null) renderer.enabled = false;
 
             var effects = appearance.sprenderer_charactermotion_Effects;
             if (effects != null)
-                foreach (var r in effects)
-                    if (r != null) r.enabled = false;
+                foreach (var renderer in effects)
+                    if (renderer != null) renderer.enabled = false;
 
             var defaults = appearance.tarnsform_defaultEffects;
             if (defaults != null)
-                foreach (var go in defaults)
-                    if (go != null) go.SetActive(false);
+                foreach (var effect in defaults)
+                    if (effect != null) effect.SetActive(false);
         }
         catch (Exception ex)
         {

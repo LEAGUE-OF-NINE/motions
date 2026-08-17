@@ -17,11 +17,11 @@ public static class MotionInjector
     /// <summary>
     /// Replaces the character's motion with custom timelines built from JSON + bundle data.
     /// </summary>
-    public static void InjectCustomMotion(SD.CharacterAppearance characterAppearance, MOTION_DETAIL motionDetail, string jsonPath, string appearanceID, System.Collections.Generic.List<TrackAsset> allVfxTracks)
+    public static void InjectCustomMotion(SD.CharacterAppearance appearance, MOTION_DETAIL detail, string jsonPath, string appearanceID, System.Collections.Generic.List<TrackAsset> allVfxTracks)
     {
         try
         {
-            string motionName = motionDetail.ToString();
+            string motionName = detail.ToString();
 
             // For skills the game selects a timeline by coin index, so 'name_N' bundle assets are coins
             // and GetTimelines already emits one timeline per coin. Other motions are dispatched with
@@ -30,14 +30,14 @@ public static class MotionInjector
             // pick from. The variant index is encoded in the timeline name so we can recover the pick.
             var bundleTimelines = new System.Collections.Generic.List<TimelineAsset>
             {
-                MotionData.FindTimelineForAppearance(appearanceID, motionDetail)
+                MotionData.FindTimelineForAppearance(appearanceID, detail)
             };
 
             if (!motionName.StartsWith("S"))
             {
                 for (int variant = 1; ; variant++)
                 {
-                    var extra = MotionData.FindTimelineForAppearance(appearanceID, motionDetail, variant);
+                    var extra = MotionData.FindTimelineForAppearance(appearanceID, detail, variant);
                     if (extra == null) break;
                     bundleTimelines.Add(extra);
                 }
@@ -52,9 +52,9 @@ public static class MotionInjector
             {
                 // Falls back to coin 0, so every coin of a multi-coin skill gets the right length
                 // even when only one folder was supplied.
-                if (MotionData.TryGetSpriteMotion(appearanceID, motionDetail, coin, out var sm))
+                if (MotionData.TryGetSpriteMotion(appearanceID, detail, coin, out var spriteMotion))
                 {
-                    coinDurations[coin] = sm.Duration;
+                    coinDurations[coin] = spriteMotion.Duration;
                     anySpriteCoin = true;
                 }
             }
@@ -70,24 +70,24 @@ public static class MotionInjector
             if (customTimelines.Count == 0)
                 return;
 
-            foreach (var tl in customTimelines)
+            foreach (var timeline in customTimelines)
             {
-                CueExtractor.StripAudioTracks(tl);
-                MotionData.ProcessedTimelines.Add(tl);
+                CueExtractor.StripAudioTracks(timeline);
+                MotionData.ProcessedTimelines.Add(timeline);
             }
 
-            characterAppearance.RemoveMotion(motionDetail);
+            appearance.RemoveMotion(detail);
             var timelineList = new Il2CppSystem.Collections.Generic.List<TimelineAsset>();
-            var gameObj = new Il2CppSystem.Collections.Generic.List<GameObject>();
+            var gameObjects = new Il2CppSystem.Collections.Generic.List<GameObject>();
 
-            foreach (var tl in customTimelines)
-                timelineList.Add(tl);
+            foreach (var timeline in customTimelines)
+                timelineList.Add(timeline);
 
-            characterAppearance.AddMotion(motionDetail, timelineList, gameObj);
+            appearance.AddMotion(detail, timelineList, gameObjects);
         }
         catch (Exception ex)
         {
-            Logger.LogError($"Failed to inject custom motion {motionDetail} for {characterAppearance.charInfo.appearanceID}: {ex}");
+            Logger.LogError($"Failed to inject custom motion {detail} for {appearance.charInfo.appearanceID}: {ex}");
         }
     }
 
@@ -95,13 +95,13 @@ public static class MotionInjector
     /// Creates the sidecar GameObject on the character: a sandbox SpriteRenderer + Animator
     /// + PlayableDirector for running custom animation clips, plus the <see cref="SidecarSyncBehavior"/>.
     /// </summary>
-    public static void AttachSidecar(SD.CharacterAppearance character, string forcedID = null)
+    public static void AttachSidecar(SD.CharacterAppearance appearance, string forcedID = null)
     {
         try
         {
-            if (character.transform.FindChild("Motions_Sandbox_Test") != null) return;
+            if (appearance.transform.FindChild("Motions_Sandbox_Test") != null) return;
 
-            string appearanceID = forcedID ?? character.charInfo.appearanceID;
+            string appearanceID = forcedID ?? appearance.charInfo.appearanceID;
             TimelineAsset customTimeline = MotionData.FindTimelineForAppearance(appearanceID);
 
             // A sprite motion has no TimelineAsset to find, and a props-only character has neither,
@@ -110,35 +110,35 @@ public static class MotionInjector
                 && !MotionData.HasProps(appearanceID)) return;
 
             GameObject sandboxObj = new("Motions_Sandbox_Test");
-            sandboxObj.transform.SetParent(character.transform);
+            sandboxObj.transform.SetParent(appearance.transform);
             sandboxObj.transform.localPosition = Vector3.zero;
             sandboxObj.transform.localScale = Vector3.one;
 
-            var testRenderer = sandboxObj.AddComponent<SpriteRenderer>();
-            testRenderer.sortingLayerName = "Front";
-            testRenderer.sortingOrder = 999;
-            testRenderer.enabled = false;
+            var sandboxRenderer = sandboxObj.AddComponent<SpriteRenderer>();
+            sandboxRenderer.sortingLayerName = "Front";
+            sandboxRenderer.sortingOrder = 999;
+            sandboxRenderer.enabled = false;
 
-            var testAnimator = sandboxObj.AddComponent<Animator>();
+            var slaveAnimator = sandboxObj.AddComponent<Animator>();
             var slaveDirector = sandboxObj.AddComponent<PlayableDirector>();
             slaveDirector.extrapolationMode = DirectorWrapMode.None;
 
-            var syncScript = sandboxObj.AddComponent<SidecarSyncBehavior>();
-            syncScript.MasterDirector = character._playableDirector;
-            syncScript.SlaveDirector = slaveDirector;
-            syncScript.SlaveAnimator = testAnimator;
-            syncScript.SandboxRenderer = testRenderer;
-            syncScript.OriginalRenderer = character.sprenderer_charactermotion;
-            syncScript.Appearance = character;
+            var sync = sandboxObj.AddComponent<SidecarSyncBehavior>();
+            sync.MasterDirector = appearance._playableDirector;
+            sync.SlaveDirector = slaveDirector;
+            sync.SlaveAnimator = slaveAnimator;
+            sync.SandboxRenderer = sandboxRenderer;
+            sync.OriginalRenderer = appearance.sprenderer_charactermotion;
+            sync.Appearance = appearance;
 
             if (MotionData.HasProps(appearanceID))
             {
                 var rig = sandboxObj.AddComponent<PropRig>();
-                rig.Sync = syncScript;
+                rig.Sync = sync;
                 rig.AppearanceID = appearanceID;
             }
 
-            MotionData.PatchedCharacters.Add(character);
+            MotionData.PatchedCharacters.Add(appearance);
             Logger.LogWarning($"Animation Sidecar attached to {appearanceID}");
         }
         catch (Exception ex)
@@ -153,12 +153,12 @@ public static class MotionInjector
     /// originals alongside the sandbox lets custom and vanilla motions each trail correctly without
     /// swapping anything per motion. Idempotent, and re-applies itself if the game rebuilds the list.
     /// </summary>
-    private static void RegisterTrailSource(SD.CharacterAppearance character, SidecarSyncBehavior sync)
+    private static void RegisterTrailSource(SD.CharacterAppearance appearance, SidecarSyncBehavior sync)
     {
         try
         {
             // Resolved on use, not in AttachSidecar: the trail component initializes after we attach.
-            var trail = character.GetComponentInChildren<CharacterAppearanceTrail>(true);
+            var trail = appearance.GetComponentInChildren<CharacterAppearanceTrail>(true);
             if (trail == null) return;
 
             var sources = trail._sourceRenderers;
@@ -183,7 +183,7 @@ public static class MotionInjector
     /// <summary>
     /// Plays the custom motion on the sidecar: assigns sound/VFX cues, starts the slave director, and syncs.
     /// </summary>
-    public static void PlayCustomMotion(SD.CharacterAppearance appearance, MOTION_DETAIL motiondetail, int index)
+    public static void PlayCustomMotion(SD.CharacterAppearance appearance, MOTION_DETAIL detail, int index)
     {
         string appearanceID = appearance.charInfo.appearanceID;
         if (string.IsNullOrEmpty(appearanceID)) return;
@@ -198,17 +198,17 @@ public static class MotionInjector
             sandboxTransform = appearance.transform.FindChild("Motions_Sandbox_Test");
         }
 
-        var syncScript = sandboxTransform?.GetComponent<SidecarSyncBehavior>();
-        if (syncScript == null) return;
+        var sync = sandboxTransform?.GetComponent<SidecarSyncBehavior>();
+        if (sync == null) return;
 
-        RegisterTrailSource(appearance, syncScript);
+        RegisterTrailSource(appearance, sync);
 
-        var key = MotionKey.Create(appearanceID, motiondetail, index);
+        var key = MotionKey.Create(appearanceID, detail, index);
 
-        syncScript.CurrentMotion = motiondetail;
-        syncScript.CurrentCoin = index;
+        sync.CurrentMotion = detail;
+        sync.CurrentCoin = index;
 
-        MotionData.TryGetSpriteMotion(appearanceID, motiondetail, index, out var spriteMotion);
+        MotionData.TryGetSpriteMotion(appearanceID, detail, index, out var spriteMotion);
 
         TimelineAsset customTimeline;
 
@@ -219,41 +219,41 @@ public static class MotionInjector
             if (!MotionData.ClockTimelines.TryGetValue(key, out customTimeline) || customTimeline == null)
             {
                 customTimeline = ScriptableObject.CreateInstance<TimelineAsset>();
-                customTimeline.name = $"SpriteClock_{motiondetail}_{index}";
+                customTimeline.name = $"SpriteClock_{detail}_{index}";
                 customTimeline.durationMode = TimelineAsset.DurationMode.FixedLength;
                 customTimeline.fixedDuration = spriteMotion.Duration;
                 MotionData.ClockTimelines[key] = customTimeline;
             }
 
-            syncScript.Frames = spriteMotion.Sprites;
-            syncScript.FrameTimes = spriteMotion.Times;
-            syncScript.ResetFrameCursor();
+            sync.Frames = spriteMotion.Sprites;
+            sync.FrameTimes = spriteMotion.Times;
+            sync.ResetFrameCursor();
         }
         else
         {
             // GetOrCacheTimeline populates SoundCueCache/VfxCueCache as a side effect,
             // so reading caches after this call is safe.
-            customTimeline = CueExtractor.GetOrCacheTimeline(appearanceID, motiondetail, index);
+            customTimeline = CueExtractor.GetOrCacheTimeline(appearanceID, detail, index);
 
             // Must be cleared, or a previous sprite motion's frames keep rendering over a bundle one.
-            syncScript.Frames = null;
-            syncScript.FrameTimes = null;
+            sync.Frames = null;
+            sync.FrameTimes = null;
         }
 
         // Props author their action times as fractions of this.
-        syncScript.MotionDuration = customTimeline != null ? customTimeline.duration : 0.0;
+        sync.MotionDuration = customTimeline != null ? customTimeline.duration : 0.0;
 
-        LoadSoundCues(syncScript, spriteMotion, key);
-        LoadVfxCues(syncScript, key);
-        StartTimeline(syncScript, customTimeline, motiondetail);
+        LoadSoundCues(sync, spriteMotion, key);
+        LoadVfxCues(sync, key);
+        StartTimeline(sync, customTimeline, detail);
     }
 
     /// <summary>Refills the sidecar's sound cues for the motion about to play, from the sprite
     /// motion's own list or the bundle timeline's extracted one.</summary>
-    private static void LoadSoundCues(SidecarSyncBehavior syncScript, SpriteMotion spriteMotion,
+    private static void LoadSoundCues(SidecarSyncBehavior sync, SpriteMotion spriteMotion,
                                       MotionKey key)
     {
-        syncScript.SoundCues.Clear();
+        sync.SoundCues.Clear();
 
         var cueSource = spriteMotion != null
             ? spriteMotion.Sounds
@@ -261,20 +261,20 @@ public static class MotionInjector
 
         if (cueSource == null) return;
 
-        if (syncScript.SoundCues.Capacity < cueSource.Count)
-            syncScript.SoundCues.Capacity = cueSource.Count;
+        if (sync.SoundCues.Capacity < cueSource.Count)
+            sync.SoundCues.Capacity = cueSource.Count;
 
         // Copied, not shared: SoundCue is a struct carrying Triggered and ActiveChannel, and
         // the cached list is reused on every play of the motion.
         for (int i = 0; i < cueSource.Count; i++)
         {
-            var c = cueSource[i];
-            syncScript.SoundCues.Add(new SoundCue
+            var cue = cueSource[i];
+            sync.SoundCues.Add(new SoundCue
             {
-                StartTime = c.StartTime,
-                ClipIn = c.ClipIn,
-                Duration = c.Duration,
-                WavData = c.WavData,
+                StartTime = cue.StartTime,
+                ClipIn = cue.ClipIn,
+                Duration = cue.Duration,
+                WavData = cue.WavData,
                 Triggered = false
             });
         }
@@ -283,43 +283,43 @@ public static class MotionInjector
     /// <summary>Refills the sidecar's VFX cues, pre-instantiating each prefab inactive so the cue
     /// only has to switch it on. Left alone when this motion has no custom VFX of its own - the
     /// previous motion's cues are cheaper to keep than to rebuild.</summary>
-    private static void LoadVfxCues(SidecarSyncBehavior syncScript, MotionKey key)
+    private static void LoadVfxCues(SidecarSyncBehavior sync, MotionKey key)
     {
         if (!MotionData.VfxCueCache.TryGetValue(key, out var vfxCues) || vfxCues.Count == 0) return;
 
-        for (int i = 0; i < syncScript.VfxCues.Count; i++)
+        for (int i = 0; i < sync.VfxCues.Count; i++)
         {
-            var old = syncScript.VfxCues[i];
+            var old = sync.VfxCues[i];
             if (old.ActiveInstance != null)
                 UnityEngine.Object.Destroy(old.ActiveInstance);
         }
-        syncScript.VfxCues.Clear();
+        sync.VfxCues.Clear();
 
-        if (syncScript.VfxCues.Capacity < vfxCues.Count)
-            syncScript.VfxCues.Capacity = vfxCues.Count;
+        if (sync.VfxCues.Capacity < vfxCues.Count)
+            sync.VfxCues.Capacity = vfxCues.Count;
 
         for (int i = 0; i < vfxCues.Count; i++)
         {
-            var c = vfxCues[i];
+            var cue = vfxCues[i];
 
             GameObject preloaded = null;
-            if (c.Prefab != null)
+            if (cue.Prefab != null)
             {
-                preloaded = UnityEngine.Object.Instantiate(c.Prefab, syncScript.SandboxRenderer.transform);
+                preloaded = UnityEngine.Object.Instantiate(cue.Prefab, sync.SandboxRenderer.transform);
                 preloaded.SetActive(false);
             }
 
-            syncScript.VfxCues.Add(new VfxCue
+            sync.VfxCues.Add(new VfxCue
             {
-                StartTime = c.StartTime,
-                Duration = c.Duration,
-                Prefab = c.Prefab,
+                StartTime = cue.StartTime,
+                Duration = cue.Duration,
+                Prefab = cue.Prefab,
                 Triggered = false,
                 ActiveInstance = preloaded,
-                SpawnTarget = c.SpawnTarget,
-                OffsetX = c.OffsetX,
-                OffsetY = c.OffsetY,
-                OffsetZ = c.OffsetZ
+                SpawnTarget = cue.SpawnTarget,
+                OffsetX = cue.OffsetX,
+                OffsetY = cue.OffsetY,
+                OffsetZ = cue.OffsetZ
             });
         }
     }
@@ -327,45 +327,45 @@ public static class MotionInjector
     /// <summary>Hands the timeline to the slave director and swaps the sidecar in for the original
     /// renderer. A null timeline is the "nothing custom here" case: the sidecar steps aside and the
     /// game's own renderer comes back on.</summary>
-    private static void StartTimeline(SidecarSyncBehavior syncScript, TimelineAsset customTimeline,
-                                      MOTION_DETAIL motiondetail)
+    private static void StartTimeline(SidecarSyncBehavior sync, TimelineAsset customTimeline,
+                                      MOTION_DETAIL detail)
     {
         if (customTimeline == null)
         {
-            syncScript.IsModdedSkillActive = false;
-            syncScript.SandboxRenderer.enabled = false;
+            sync.IsModdedSkillActive = false;
+            sync.SandboxRenderer.enabled = false;
 
-            if (syncScript.OriginalRenderer != null)
-                syncScript.OriginalRenderer.enabled = true;
+            if (sync.OriginalRenderer != null)
+                sync.OriginalRenderer.enabled = true;
             return;
         }
 
-        syncScript.IsModdedSkillActive = true;
-        syncScript.SandboxRenderer.enabled = true;
-        syncScript.SlaveDirector.playableAsset = customTimeline;
+        sync.IsModdedSkillActive = true;
+        sync.SandboxRenderer.enabled = true;
+        sync.SlaveDirector.playableAsset = customTimeline;
 
         // Skills and parries are driven frame-by-frame off the master director instead of played
         // free-running, so their hit timings stay locked to the game's own animation.
-        string motionName = motiondetail.ToString();
+        string motionName = detail.ToString();
         bool isSpecial = motionName.StartsWith("S") || motionName.ToLower().Contains("parrying");
-        syncScript.ShouldSync = isSpecial;
+        sync.ShouldSync = isSpecial;
 
-        syncScript.SlaveDirector.time = 0;
-        syncScript.SlaveDirector.extrapolationMode = motiondetail == MOTION_DETAIL.Idle
+        sync.SlaveDirector.time = 0;
+        sync.SlaveDirector.extrapolationMode = detail == MOTION_DETAIL.Idle
             ? DirectorWrapMode.Loop
             : DirectorWrapMode.None;
 
         if (!isSpecial)
-            syncScript.SlaveDirector.Play();
+            sync.SlaveDirector.Play();
 
         foreach (var track in customTimeline.flattenedTracks)
         {
             var animTrack = track.TryCast<AnimationTrack>();
             if (animTrack != null)
-                syncScript.SlaveDirector.SetGenericBinding(track, syncScript.SlaveAnimator);
+                sync.SlaveDirector.SetGenericBinding(track, sync.SlaveAnimator);
         }
 
-        if (syncScript.OriginalRenderer != null)
-            syncScript.OriginalRenderer.enabled = false;
+        if (sync.OriginalRenderer != null)
+            sync.OriginalRenderer.enabled = false;
     }
 }
