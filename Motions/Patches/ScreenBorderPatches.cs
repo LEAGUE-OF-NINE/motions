@@ -9,7 +9,7 @@ using UnityEngine.UI;
 
 namespace Motions
 {
-    internal class ScreenBorderPatches
+    public class ScreenBorderPatches
     {
         private const string ScriptPrefix = "Screenborder_";
 
@@ -96,12 +96,24 @@ namespace Motions
 
             _initialized = true;
         }
+        
         public static void SetIntensity(float intensity)
         {
             if (_loadedMaterial != null && _loadedMaterial.HasFloat("_Intensity"))
             {
                 _loadedMaterial.SetFloat("_Intensity", intensity);
             }
+        }
+
+        public static Material GetLoadedMaterial()
+        {
+            return _loadedMaterial;
+        }
+
+        public static bool TryGetLoadedMaterial(out Material material)
+        {
+            material = _loadedMaterial;
+            return material != null;
         }
 
         public static void Unload()
