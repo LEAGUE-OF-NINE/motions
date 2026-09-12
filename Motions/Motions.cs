@@ -2,6 +2,7 @@ using HarmonyLib;
 using Il2CppInterop.Runtime.Injection;
 using Il2CppSystem.IO;
 using Lethe.Patches;
+using Lethe.EnumInjections;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
