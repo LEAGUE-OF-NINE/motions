@@ -2,6 +2,7 @@
 using Il2CppInterop.Runtime;
 using Lethe.EnumInjections;
 using Lethe.Patches;
+using Lethe.EnumInjections;
 using System;
 using System.IO;
 using System.Linq;

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Lethe.EnumInjections;
 using Lethe.Patches;
+using Lethe.EnumInjections;
 using UnityEngine;
 
 namespace Motions;
