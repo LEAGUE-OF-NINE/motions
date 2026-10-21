@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using UnityEngine;
+using CustomBuffs = Lethe.Patches.CustomBuffs;
 
 namespace Motions
 {

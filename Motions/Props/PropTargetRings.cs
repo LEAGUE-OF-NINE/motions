@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Lethe.EnumInjections;
 using Lethe.Patches;
 using UnityEngine;
+using CustomBuffs = Lethe.Patches.CustomBuffs;
 
 namespace Motions;
 

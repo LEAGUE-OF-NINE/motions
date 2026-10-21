@@ -1,5 +1,6 @@
 using HarmonyLib;
 using Il2CppInterop.Runtime;
+using SD;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -108,18 +109,19 @@ namespace Motions
                 viewType = view
             });
             return false;
-            
-            // updates the skill uis position
-            [HarmonyPatch(typeof(CharacterAppearance), nameof(CharacterAppearance.OnAnimEvent))]
-            [HarmonyPrefix]
-            public static void OnAnimEvent_Postfix(CharacterAppearance __instance, int i)
+
+        }
+
+        // updates the skill uis position
+        [HarmonyPatch(typeof(CharacterAppearance), nameof(CharacterAppearance.OnAnimEvent))]
+        [HarmonyPrefix]
+        public static void OnAnimEvent_Postfix(CharacterAppearance __instance, int i)
+        {
+            switch (i)
             {
-                switch (i)
-                {
-                    case 6001:
-                        __instance._battleUnitView._uiManager.SetUISize(-1);
-                        return;
-                }
+                case 6001:
+                    __instance._battleUnitView._uiManager.SetUISize(-1);
+                    return;
             }
         }
     }

@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Playables;
 using UnityEngine.Timeline;
+using CustomBuffs = Lethe.Patches.CustomBuffs;
 
 namespace Motions;
 
