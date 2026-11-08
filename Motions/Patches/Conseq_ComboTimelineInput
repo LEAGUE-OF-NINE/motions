@@ -1,0 +1,46 @@
+using ModularSkillScripts;
+using SD;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using UnityEngine;
+
+namespace Motions.Motions.Patches
+{
+    public class Conseq_ComboTimelineInput : IModularConsequence
+    {
+        public void ExecuteConsequence(ModularSA modular, string section, string circledSection, string[] circles)
+        {
+            // comboinput(id####) [up to 12 followers at the same time, id#### is required]
+            if (circles.Length < 1 && circles.Length > 12)
+                return;
+
+            // getting a skill ID to record it in the dictionary along with the units we want to see in the combo
+            // order is strict
+            // Follower_0 - circles[0], Follower_1 - circles[1] etc
+            BattleActionModel action = modular.modsa_selfAction;
+
+            int currentSkillId = 0;
+
+            if (modular.modsa_skillModel != null)
+                currentSkillId = modular.modsa_skillModel.GetID();
+            if (action != null)
+                currentSkillId = action.Skill.GetID();
+
+            // checking existance of the key
+            if (CustomBattleSkillView_er.skillids_and_followers.ContainsKey(currentSkillId.ToString()))
+                return;
+
+            // creating a new list to store only circles like id30905/id10411/id10613 etc
+            Il2CppSystem.Collections.Generic.List<string> listOfFollowViews = new();
+            foreach (var possibleView in circles)
+            {
+                listOfFollowViews.Add(possibleView);
+            }
+            CustomBattleSkillView_er.skillids_and_followers.Add(currentSkillId.ToString(), listOfFollowViews);
+
+        }
+    }
+}
