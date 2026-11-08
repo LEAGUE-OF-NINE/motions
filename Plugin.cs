@@ -10,6 +10,7 @@ namespace Motions;
 
 [BepInPlugin(GUID, NAME, VERSION)]
 [BepInDependency("GlitchGames.ModularSkillScripts")]
+[BepInDependency("Doppelglower.CustomAssetLoader")]
 public class Plugin : BasePlugin
 {
     public const string GUID = $"{AUTHOR}.{NAME}";
@@ -38,5 +39,6 @@ public class Plugin : BasePlugin
         harmony.PatchAll(typeof(ScreenBorderPatches));
         harmony.PatchAll(typeof(CustomBattleSkillView_er));
         MainClass.consequenceDict["customslotvfx"] = new DashboardInstantiation();
+        MainClass.consequenceDict["comboinput"] = new Conseq_ComboTimelineInput();
     }
 }
